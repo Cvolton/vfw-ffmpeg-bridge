@@ -5,59 +5,35 @@
 #define MINIAUDIO_IMPLEMENTATION
 #include "miniaudio.h"
 
+volatile LONG g_isRecording = 0;
+ma_encoder encoder;
+ma_device device;
+BOOL g_deviceInitialized = FALSE;
+
 // Recording logic
 void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount)
 {
-    ma_encoder* pEncoder = (ma_encoder*)pDevice->pUserData;
-
-    if (pInput != NULL) {
-        ma_encoder_write_pcm_frames(pEncoder, pInput, frameCount, NULL);
+    if (InterlockedCompareExchange(&g_isRecording, 0, 0) == 1 && pInput != NULL) {
+        ma_encoder_write_pcm_frames(&encoder, pInput, frameCount, NULL);
     }
 }
 
-ma_result result;
-ma_encoder_config encoderConfig;
-ma_encoder encoder;
-ma_device_config deviceConfig;
-ma_device device;
+void init_wasapi_device() {
+    if (g_deviceInitialized) return;
 
-void startRecording() {
-    const char* outputFile = "c:\\temp\\desktop_audio.wav";
-
-    encoderConfig = ma_encoder_config_init(ma_encoding_format_wav, ma_format_f32, 2, 48000);
-    result = ma_encoder_init_file(outputFile, &encoderConfig, &encoder);
-    if (result != MA_SUCCESS) {
-        OutputDebugStringA("Failed to initialize the output file.\n");
-        return;
-    }
-
-    deviceConfig = ma_device_config_init(ma_device_type_loopback);
+    ma_device_config deviceConfig = ma_device_config_init(ma_device_type_loopback);
     deviceConfig.capture.pDeviceID  = NULL;
-    deviceConfig.capture.format     = encoder.config.format;
-    deviceConfig.capture.channels   = encoder.config.channels;
-    deviceConfig.sampleRate         = encoder.config.sampleRate;
+    deviceConfig.capture.format     = ma_format_f32;
+    deviceConfig.capture.channels   = 2;
+    deviceConfig.sampleRate         = 48000;
     deviceConfig.dataCallback       = data_callback;
-    deviceConfig.pUserData          = &encoder;
+    deviceConfig.performanceProfile = ma_performance_profile_low_latency;
 
-    result = ma_device_init(NULL, &deviceConfig, &device);
-    if (result != MA_SUCCESS) {
-        OutputDebugStringA("[TMAudio] Failed to initialize loopback device.\n");
-        ma_encoder_uninit(&encoder);
-        return;
+    if (ma_device_init(NULL, &deviceConfig, &device) == MA_SUCCESS) {
+        if (ma_device_start(&device) == MA_SUCCESS) {
+            g_deviceInitialized = TRUE;
+        }
     }
-
-    result = ma_device_start(&device);
-    if (result != MA_SUCCESS) {
-        OutputDebugStringA("[TMAudio] Failed to start device.\n");
-        ma_device_uninit(&device);
-        ma_encoder_uninit(&encoder);
-        return;
-    }
-}
-
-void stopRecording() {
-    ma_device_uninit(&device);
-    ma_encoder_uninit(&encoder);
 }
 
 // Hooks
@@ -75,7 +51,14 @@ HRESULT WINAPI Hooked_Start(LPDIRECTSOUNDCAPTUREBUFFER pThis, DWORD dwFlags)
 {
     OutputDebugStringA("[TMAudio] Recording STARTED!");
     
-    startRecording();
+    if (InterlockedCompareExchange(&g_isRecording, 0, 0) == 0) {
+        const char* outputFile = "c:\\temp\\output.wav";
+        ma_encoder_config encoderConfig = ma_encoder_config_init(ma_encoding_format_wav, ma_format_f32, 2, 48000);
+        
+        if (ma_encoder_init_file(outputFile, &encoderConfig, &encoder) == MA_SUCCESS) {
+            InterlockedExchange(&g_isRecording, 1);
+        }
+    }
 
     return Original_Start(pThis, dwFlags);
 }
@@ -84,7 +67,13 @@ HRESULT WINAPI Hooked_Stop(LPDIRECTSOUNDCAPTUREBUFFER pThis)
 {
     OutputDebugStringA("[TMAudio] Recording STOPPED!");
     
-    stopRecording();
+    if (InterlockedCompareExchange(&g_isRecording, 0, 0) == 1) {
+        InterlockedExchange(&g_isRecording, 0);
+        
+        Sleep(20); 
+        
+        ma_encoder_uninit(&encoder);
+    }
 
     return Original_Stop(pThis);
 }
@@ -109,6 +98,8 @@ HRESULT WINAPI Hooked_CreateCaptureBuffer(LPDIRECTSOUNDCAPTURE pThis, LPCDSCBUFF
             MH_EnableHook(realStopAddr);
         }
         
+        init_wasapi_device();
+
         OutputDebugStringA("[TMAudio] Successfully hooked Start and Stop!");
     }
 
@@ -117,8 +108,6 @@ HRESULT WINAPI Hooked_CreateCaptureBuffer(LPDIRECTSOUNDCAPTURE pThis, LPCDSCBUFF
 
 HRESULT WINAPI Hooked_DirectSoundCaptureCreate8(LPCGUID pcGuidDevice, LPDIRECTSOUNDCAPTURE8 *ppDSC8, LPUNKNOWN pUnkOuter)
 {
-    OutputDebugStringA("[TMAudio] Intercepted DirectSoundCaptureCreate8 call.");
-
     HRESULT hr = Original_DirectSoundCaptureCreate8(pcGuidDevice, ppDSC8, pUnkOuter);
     
     if (SUCCEEDED(hr) && ppDSC8 && *ppDSC8)
@@ -129,8 +118,6 @@ HRESULT WINAPI Hooked_DirectSoundCaptureCreate8(LPCGUID pcGuidDevice, LPDIRECTSO
         if (MH_CreateHook(realCreateBufAddr, &Hooked_CreateCaptureBuffer, (LPVOID*)&Original_CreateCaptureBuffer) == MH_OK) {
             MH_EnableHook(realCreateBufAddr);
         }
-        
-        OutputDebugStringA("[TMAudio] Successfully hooked CreateCaptureBuffer!");
     }
 
     return hr;
