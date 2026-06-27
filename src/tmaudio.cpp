@@ -5,131 +5,111 @@
 #define MINIAUDIO_IMPLEMENTATION
 #include "miniaudio.h"
 
-ma_pcm_rb g_ringBuffer;
-BOOL g_isRecording = FALSE;
-
 // Recording logic
 void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount)
 {
-    if (pInput == NULL) return;
+    ma_encoder* pEncoder = (ma_encoder*)pDevice->pUserData;
 
-    ma_uint32 framesToAcquire = frameCount;
-    void* pWriteBuffer;
-    
-    ma_result result = ma_pcm_rb_acquire_write(&g_ringBuffer, &framesToAcquire, &pWriteBuffer);
-    if (result == MA_SUCCESS && framesToAcquire > 0) {
-        ma_uint32 bytesPerFrame = ma_get_bytes_per_frame(pDevice->capture.format, pDevice->capture.channels);
-        memcpy(pWriteBuffer, pInput, framesToAcquire * bytesPerFrame);
-        
-        ma_pcm_rb_commit_write(&g_ringBuffer, framesToAcquire);
+    if (pInput != NULL) {
+        ma_encoder_write_pcm_frames(pEncoder, pInput, frameCount, NULL);
     }
 }
 
+ma_result result;
+ma_encoder_config encoderConfig;
+ma_encoder encoder;
 ma_device_config deviceConfig;
 ma_device device;
+
+void startRecording() {
+    const char* outputFile = "c:\\temp\\desktop_audio.wav";
+
+    encoderConfig = ma_encoder_config_init(ma_encoding_format_wav, ma_format_f32, 2, 48000);
+    result = ma_encoder_init_file(outputFile, &encoderConfig, &encoder);
+    if (result != MA_SUCCESS) {
+        OutputDebugStringA("Failed to initialize the output file.\n");
+        return;
+    }
+
+    deviceConfig = ma_device_config_init(ma_device_type_loopback);
+    deviceConfig.capture.pDeviceID  = NULL;
+    deviceConfig.capture.format     = encoder.config.format;
+    deviceConfig.capture.channels   = encoder.config.channels;
+    deviceConfig.sampleRate         = encoder.config.sampleRate;
+    deviceConfig.dataCallback       = data_callback;
+    deviceConfig.pUserData          = &encoder;
+
+    result = ma_device_init(NULL, &deviceConfig, &device);
+    if (result != MA_SUCCESS) {
+        OutputDebugStringA("[TMAudio] Failed to initialize loopback device.\n");
+        ma_encoder_uninit(&encoder);
+        return;
+    }
+
+    result = ma_device_start(&device);
+    if (result != MA_SUCCESS) {
+        OutputDebugStringA("[TMAudio] Failed to start device.\n");
+        ma_device_uninit(&device);
+        ma_encoder_uninit(&encoder);
+        return;
+    }
+}
+
+void stopRecording() {
+    ma_device_uninit(&device);
+    ma_encoder_uninit(&encoder);
+}
 
 // Hooks
 typedef HRESULT(WINAPI *pDirectSoundCaptureCreate8)(LPCGUID, LPDIRECTSOUNDCAPTURE8*, LPUNKNOWN);
 typedef HRESULT(WINAPI *pCreateCaptureBuffer)(LPDIRECTSOUNDCAPTURE, LPCDSCBUFFERDESC, LPDIRECTSOUNDCAPTUREBUFFER*, LPUNKNOWN);
 typedef HRESULT(WINAPI *pStart)(LPDIRECTSOUNDCAPTUREBUFFER, DWORD);
 typedef HRESULT(WINAPI *pStop)(LPDIRECTSOUNDCAPTUREBUFFER);
-typedef HRESULT(WINAPI *pLock)(LPDIRECTSOUNDCAPTUREBUFFER, DWORD, DWORD, LPVOID*, LPDWORD, LPVOID*, LPDWORD, DWORD);
 
 pDirectSoundCaptureCreate8 Original_DirectSoundCaptureCreate8 = nullptr;
 pCreateCaptureBuffer Original_CreateCaptureBuffer = nullptr;
 pStart Original_Start = nullptr;
 pStop Original_Stop = nullptr;
-pLock Original_Lock = nullptr;
-
-HRESULT WINAPI Hooked_Lock(LPDIRECTSOUNDCAPTUREBUFFER pThis, DWORD dwOffset, DWORD dwBytes, 
-                           LPVOID *ppvAudioPtr1, LPDWORD pdwAudioBytes1, 
-                           LPVOID *ppvAudioPtr2, LPDWORD pdwAudioBytes2, DWORD dwFlags)
-{
-    HRESULT hr = Original_Lock(pThis, dwOffset, dwBytes, ppvAudioPtr1, pdwAudioBytes1, ppvAudioPtr2, pdwAudioBytes2, dwFlags);
-    
-    if (SUCCEEDED(hr) && g_isRecording) {
-        if (ppvAudioPtr1 && pdwAudioBytes1 && *pdwAudioBytes1 > 0) {
-            ma_uint32 bytesPerFrame = ma_get_bytes_per_frame(device.capture.format, device.capture.channels);
-            ma_uint32 framesReq = *pdwAudioBytes1 / bytesPerFrame;
-            void* pReadBuffer;
-            
-            if (ma_pcm_rb_acquire_read(&g_ringBuffer, &framesReq, &pReadBuffer) == MA_SUCCESS && framesReq > 0) {
-                memcpy(*ppvAudioPtr1, pReadBuffer, framesReq * bytesPerFrame);
-                ma_pcm_rb_commit_read(&g_ringBuffer, framesReq);
-            } else {
-                memset(*ppvAudioPtr1, 0, *pdwAudioBytes1);
-            }
-        }
-
-        if (ppvAudioPtr2 && pdwAudioBytes2 && *pdwAudioBytes2 > 0) {
-            ma_uint32 bytesPerFrame = ma_get_bytes_per_frame(device.capture.format, device.capture.channels);
-            ma_uint32 framesReq = *pdwAudioBytes2 / bytesPerFrame;
-            void* pReadBuffer;
-            
-            if (ma_pcm_rb_acquire_read(&g_ringBuffer, &framesReq, &pReadBuffer) == MA_SUCCESS && framesReq > 0) {
-                memcpy(*ppvAudioPtr2, pReadBuffer, framesReq * bytesPerFrame);
-                ma_pcm_rb_commit_read(&g_ringBuffer, framesReq);
-            } else {
-                memset(*ppvAudioPtr2, 0, *pdwAudioBytes2);
-            }
-        }
-    }
-
-    return hr;
-}
 
 HRESULT WINAPI Hooked_Start(LPDIRECTSOUNDCAPTUREBUFFER pThis, DWORD dwFlags)
 {
-    if (!g_isRecording) {
-        ma_device_start(&device);
-        g_isRecording = TRUE;
-    }
+    OutputDebugStringA("[TMAudio] Recording STARTED!");
+    
+    startRecording();
+
     return Original_Start(pThis, dwFlags);
 }
 
 HRESULT WINAPI Hooked_Stop(LPDIRECTSOUNDCAPTUREBUFFER pThis)
 {
-    if (g_isRecording) {
-        ma_device_stop(&device);
-        g_isRecording = FALSE;
-    }
+    OutputDebugStringA("[TMAudio] Recording STOPPED!");
+    
+    stopRecording();
+
     return Original_Stop(pThis);
 }
 
 HRESULT WINAPI Hooked_CreateCaptureBuffer(LPDIRECTSOUNDCAPTURE pThis, LPCDSCBUFFERDESC pcDSCBufferDesc, LPDIRECTSOUNDCAPTUREBUFFER *ppDSCBuffer, LPUNKNOWN pUnkOuter)
 {
+    OutputDebugStringA("[TMAudio] Intercepted CreateCaptureBuffer call.");
+
     HRESULT hr = Original_CreateCaptureBuffer(pThis, pcDSCBufferDesc, ppDSCBuffer, pUnkOuter);
     
     if (SUCCEEDED(hr) && ppDSCBuffer && *ppDSCBuffer)
     {
         void** bufferVTable = *(void***)(*ppDSCBuffer);
 
-        void* realLockAddr  = bufferVTable[8];
         void* realStartAddr = bufferVTable[9];
-        void* realStopAddr  = bufferVTable[10];
+        void* realStopAddr = bufferVTable[10];
 
-        if (MH_CreateHook(realLockAddr, &Hooked_Lock, (LPVOID*)&Original_Lock) == MH_OK) MH_EnableHook(realLockAddr);
-        if (MH_CreateHook(realStartAddr, &Hooked_Start, (LPVOID*)&Original_Start) == MH_OK) MH_EnableHook(realStartAddr);
-        if (MH_CreateHook(realStopAddr, &Hooked_Stop, (LPVOID*)&Original_Stop) == MH_OK) MH_EnableHook(realStopAddr);
-
-        if (pcDSCBufferDesc && pcDSCBufferDesc->lpwfxFormat) {
-            WAVEFORMATEX* wfx = pcDSCBufferDesc->lpwfxFormat;
-            
-            ma_format maFormat;
-            if (wfx->wBitsPerSample == 16) maFormat = ma_format_s16;
-            else if (wfx->wBitsPerSample == 32) maFormat = ma_format_f32;
-            else maFormat = ma_format_u8;
-
-            ma_pcm_rb_init(maFormat, wfx->nChannels, wfx->nSamplesPerSec, NULL, NULL, &g_ringBuffer);
-
-            deviceConfig = ma_device_config_init(ma_device_type_loopback);
-            deviceConfig.capture.format   = maFormat;
-            deviceConfig.capture.channels = wfx->nChannels;
-            deviceConfig.sampleRate       = wfx->nSamplesPerSec;
-            deviceConfig.dataCallback     = data_callback;
-
-            ma_device_init(NULL, &deviceConfig, &device);
+        if (MH_CreateHook(realStartAddr, &Hooked_Start, (LPVOID*)&Original_Start) == MH_OK) {
+            MH_EnableHook(realStartAddr);
         }
+        if (MH_CreateHook(realStopAddr, &Hooked_Stop, (LPVOID*)&Original_Stop) == MH_OK) {
+            MH_EnableHook(realStopAddr);
+        }
+        
+        OutputDebugStringA("[TMAudio] Successfully hooked Start and Stop!");
     }
 
     return hr;
