@@ -209,3 +209,38 @@ extern "C" LRESULT WINAPI DriverProc(
 
     return DefDriverProc(dwDriverId, hDriver, uMsg, lParam1, lParam2);
 }
+
+void LoadAdjacentDLL(HMODULE hModule, const char* targetDllName)
+{
+    char modulePath[MAX_PATH];
+    
+    // Get the full absolute path of THIS dll (vfwbrdg.dll)
+    if (GetModuleFileNameA(hModule, modulePath, MAX_PATH) != 0)
+    {
+        std::string path(modulePath);
+        
+        // Find the last backslash to isolate the directory
+        size_t lastSlash = path.find_last_of("\\/");
+        if (lastSlash != std::string::npos)
+        {
+            // Extract the directory and append the target DLL name
+            std::string dirPath = path.substr(0, lastSlash + 1);
+            std::string targetDllPath = dirPath + targetDllName;
+            
+            // Load the target DLL using the absolute path
+            LoadLibraryA(targetDllPath.c_str());
+        }
+    }
+}
+
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
+{
+    if (ul_reason_for_call == DLL_PROCESS_ATTACH)
+    {
+        DisableThreadLibraryCalls(hModule);
+        
+        // Load tmaudio.dll from the exact same folder as vfwbrdg.dll
+        LoadAdjacentDLL(hModule, "tmaudio.dll");
+    }
+    return TRUE;
+}
