@@ -38,6 +38,16 @@ namespace subprocess {
             WriteFile(m_write.handle, data, size, nullptr, nullptr);
         }
 
+        std::string read() {
+            std::string output;
+            char buffer[4096];
+            DWORD bytes_read = 0;
+            while (ReadFile(m_read.handle, buffer, sizeof(buffer), &bytes_read, nullptr) && bytes_read > 0) {
+                output.append(buffer, bytes_read);
+            }
+            return output;
+        }
+
         void close() {
             m_read.close();
             m_write.close();
@@ -47,16 +57,25 @@ namespace subprocess {
     class Popen {
     public:
         PipePair m_stdin;
+        PipePair m_stdout;
         PROCESS_INFORMATION m_proc_info{};
     public:
         Popen() {}
-        Popen(const std::wstring& command) {
+        Popen(const std::wstring& command, bool redirect_output = false) {
             STARTUPINFOW start_info = {};
 
             start_info.cb = sizeof(start_info);
-            start_info.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
-            start_info.hStdError = GetStdHandle(STD_ERROR_HANDLE);
             start_info.dwFlags |= STARTF_USESTDHANDLES;
+
+            if (redirect_output) {
+                m_stdout = PipePair::create(true);
+                start_info.hStdOutput = m_stdout.m_write.handle;
+                start_info.hStdError = m_stdout.m_write.handle;
+                m_stdout.m_read.set_inherit(false);
+            } else {
+                start_info.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+                start_info.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+            }
 
             m_stdin = PipePair::create(true);
             start_info.hStdInput = m_stdin.m_read.handle;
@@ -65,6 +84,9 @@ namespace subprocess {
             CreateProcessW(nullptr, (wchar_t*) command.data(), nullptr, nullptr, true, 0, nullptr, nullptr, &start_info, &m_proc_info);
 
             m_stdin.m_read.close();
+            if (redirect_output) {
+                m_stdout.m_write.close();
+            }
         }
 
         int wait() {

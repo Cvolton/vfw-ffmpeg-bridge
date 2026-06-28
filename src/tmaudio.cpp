@@ -3,6 +3,7 @@
 #include <atomic>
 #include <string>
 #include <format>
+#include <fstream>
 #include "MinHook.h"
 #include "subprocess.hpp"
 
@@ -50,21 +51,58 @@ extern "C" __declspec(dllexport) void SetVideoFilePath(const wchar_t* path) {
     SetOutputFilePath(std::format(L"{}_audio.wav", path).c_str());
 }
 
+double getMediaDuration(const std::wstring& path) {
+    std::wstring cmd = std::format(
+        L"ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"{}\"", 
+        path
+    );
+
+    subprocess::Popen proc(cmd, true);
+    
+    std::string output = proc.m_stdout.read();
+    proc.wait();
+    proc.m_stdout.close();
+
+    try {
+        return std::stod(output);
+    } catch (...) {
+        return 0.0;
+    }
+}
+
 void muxAudio() {
     if (!g_videoPath.empty() && !g_outputPath.empty()) {
-        std::wstring tmpVideoPath = utf8ToWide(g_videoPath) + L"_tmp";
-        MoveFileExW(utf8ToWide(g_videoPath).c_str(), tmpVideoPath.c_str(), MOVEFILE_REPLACE_EXISTING);
+        std::wstring wVideoPath = utf8ToWide(g_videoPath);
+        std::wstring wAudioPath = utf8ToWide(g_outputPath);
+        
+        std::wstring tmpVideoPath = wVideoPath + L"_tmp.mp4"; 
+        MoveFileExW(wVideoPath.c_str(), tmpVideoPath.c_str(), MOVEFILE_REPLACE_EXISTING);
 
-        std::wstring cmd = std::format(
-            L"\"ffmpeg\" -y -i \"{}\" -i \"{}\" -c:v copy -c:a aac -b:a 320k -af apad -shortest \"{}\"", 
-            tmpVideoPath, utf8ToWide(g_outputPath), utf8ToWide(g_videoPath)
-        );
+        double v_dur = getMediaDuration(tmpVideoPath);
+        double a_dur = getMediaDuration(wAudioPath);
+        double diff = v_dur - a_dur;
+
+        std::wstring cmd;
+
+        if (diff > 0.0) {
+            int delay_ms = static_cast<int>(diff * 1000.0);
+            cmd = std::format(
+                L"\"ffmpeg\" -y -i \"{}\" -i \"{}\" -c:v copy -c:a aac -b:a 320k -af \"adelay={}|{},apad\" -shortest \"{}\"", 
+                tmpVideoPath, wAudioPath, delay_ms, delay_ms, wVideoPath
+            );
+        } else {
+            double skip_seconds = std::abs(diff);
+            cmd = std::format(
+                L"\"ffmpeg\" -y -i \"{}\" -ss {:.3f} -i \"{}\" -c:v copy -c:a aac -b:a 320k -shortest \"{}\"", 
+                tmpVideoPath, skip_seconds, wAudioPath, wVideoPath
+            );
+        }
 
         subprocess::Popen muxProcess(cmd);
         muxProcess.wait(); 
 
         DeleteFileW(tmpVideoPath.c_str());
-        DeleteFileW(utf8ToWide(g_outputPath).c_str());
+        DeleteFileW(wAudioPath.c_str());
     }
 }
 
@@ -80,12 +118,11 @@ void init_wasapi_device() {
     if (g_deviceInitialized) return;
 
     ma_device_config deviceConfig = ma_device_config_init(ma_device_type_loopback);
-    deviceConfig.capture.pDeviceID  = NULL;
-    deviceConfig.capture.format     = ma_format_f32;
-    deviceConfig.capture.channels   = 2;
-    deviceConfig.sampleRate         = 48000;
-    deviceConfig.dataCallback       = data_callback;
+    deviceConfig.periodSizeInFrames = 256; 
     deviceConfig.performanceProfile = ma_performance_profile_low_latency;
+    deviceConfig.sampleRate = 48000; 
+    deviceConfig.wasapi.noHardwareOffloading = MA_TRUE; 
+    deviceConfig.dataCallback = data_callback;
 
     if (ma_device_init(NULL, &deviceConfig, &g_device) == MA_SUCCESS) {
         if (ma_device_start(&g_device) == MA_SUCCESS) {
