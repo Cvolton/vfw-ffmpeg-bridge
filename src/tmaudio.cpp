@@ -118,11 +118,13 @@ void init_wasapi_device() {
     if (g_deviceInitialized) return;
 
     ma_device_config deviceConfig = ma_device_config_init(ma_device_type_loopback);
-    deviceConfig.periodSizeInFrames = 256; 
+    //deviceConfig.periodSizeInFrames = 256; 
     deviceConfig.performanceProfile = ma_performance_profile_low_latency;
     deviceConfig.sampleRate = 48000; 
     deviceConfig.wasapi.noHardwareOffloading = MA_TRUE; 
     deviceConfig.dataCallback = data_callback;
+    deviceConfig.capture.format = ma_format_s16;
+    deviceConfig.capture.channels = 2;
 
     if (ma_device_init(NULL, &deviceConfig, &g_device) == MA_SUCCESS) {
         if (ma_device_start(&g_device) == MA_SUCCESS) {
@@ -130,6 +132,36 @@ void init_wasapi_device() {
         }
     }
 }
+
+void start_audio_recording() {
+    OutputDebugStringA("[TMAudio] Recording STARTED!");
+    
+    if (!g_isRecording) {
+        const char* outputFile = g_outputPath.c_str();
+        ma_encoder_config encoderConfig = ma_encoder_config_init(ma_encoding_format_wav, ma_format_s16, 2, 48000);
+        
+        if (ma_encoder_init_file(outputFile, &encoderConfig, &g_encoder) == MA_SUCCESS) {
+            g_isRecording = true;
+        }
+    }
+}
+
+void stop_audio_recording() {
+    OutputDebugStringA("[TMAudio] Recording STOPPED!");
+    
+    if (g_isRecording.exchange(false)) {
+        
+        Sleep(20); 
+        
+        ma_encoder_uninit(&g_encoder);
+
+        muxAudio();
+    }
+}
+
+/**
+ * TMN ESWC
+ */
 
 // Hooks
 typedef HRESULT(WINAPI *pDirectSoundCaptureCreate8)(LPCGUID, LPDIRECTSOUNDCAPTURE8*, LPUNKNOWN);
@@ -144,32 +176,14 @@ pStop Original_Stop = nullptr;
 
 HRESULT WINAPI Hooked_Start(LPDIRECTSOUNDCAPTUREBUFFER pThis, DWORD dwFlags)
 {
-    OutputDebugStringA("[TMAudio] Recording STARTED!");
-    
-    if (!g_isRecording) {
-        const char* outputFile = g_outputPath.c_str();
-        ma_encoder_config encoderConfig = ma_encoder_config_init(ma_encoding_format_wav, ma_format_f32, 2, 48000);
-        
-        if (ma_encoder_init_file(outputFile, &encoderConfig, &g_encoder) == MA_SUCCESS) {
-            g_isRecording = true;
-        }
-    }
+    start_audio_recording();
 
     return Original_Start(pThis, dwFlags);
 }
 
 HRESULT WINAPI Hooked_Stop(LPDIRECTSOUNDCAPTUREBUFFER pThis)
 {
-    OutputDebugStringA("[TMAudio] Recording STOPPED!");
-    
-    if (g_isRecording.exchange(false)) {
-        
-        Sleep(20); 
-        
-        ma_encoder_uninit(&g_encoder);
-
-        muxAudio();
-    }
+    stop_audio_recording();
 
     return Original_Stop(pThis);
 }
@@ -234,6 +248,66 @@ void SetupDirectSoundHook()
     }
 }
 
+/**
+ * TMUF
+ */
+typedef void* ALCdevice;
+typedef void (__cdecl *palcCaptureStart)(ALCdevice device);
+typedef void (__cdecl *palcCaptureStop)(ALCdevice device);
+
+palcCaptureStart Original_alcCaptureStart = nullptr;
+palcCaptureStop Original_alcCaptureStop = nullptr;
+
+void __cdecl Hooked_alcCaptureStart(ALCdevice device)
+{
+    start_audio_recording();
+
+    Original_alcCaptureStart(device);
+}
+
+void __cdecl Hooked_alcCaptureStop(ALCdevice device)
+{
+    stop_audio_recording();
+
+    Original_alcCaptureStop(device);
+}
+
+void SetupOpenALHook()
+{
+    HMODULE hOpenAL = GetModuleHandleA("OPENAL32.DLL");
+    if (!hOpenAL) {
+        hOpenAL = LoadLibraryA("OPENAL32.DLL"); 
+    }
+    
+    if (!hOpenAL) return;
+
+    if (MH_Initialize() != MH_OK && MH_Initialize() != MH_ERROR_ALREADY_INITIALIZED) return;
+
+    void* pStartAddr = (void*)GetProcAddress(hOpenAL, "alcCaptureStart");
+    void* pStopAddr = (void*)GetProcAddress(hOpenAL, "alcCaptureStop");
+
+    if (pStartAddr && pStopAddr) {
+        MH_CreateHook(pStartAddr, &Hooked_alcCaptureStart, (LPVOID*)&Original_alcCaptureStart);
+        MH_CreateHook(pStopAddr, &Hooked_alcCaptureStop, (LPVOID*)&Original_alcCaptureStop);
+        
+        MH_EnableHook(pStartAddr);
+        MH_EnableHook(pStopAddr);
+        
+        init_wasapi_device();
+    }
+}
+
+/**
+ * Shared
+ */
+
+DWORD WINAPI InitHooksThread(LPVOID lpParam)
+{
+    SetupDirectSoundHook();
+    SetupOpenALHook();
+    return 0;
+}
+
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
 {
     switch (ul_reason_for_call)
@@ -248,7 +322,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
             &hDummy
         );
 
-        SetupDirectSoundHook();
+        CreateThread(nullptr, 0, InitHooksThread, nullptr, 0, nullptr);
         break;
         
     case DLL_PROCESS_DETACH:
