@@ -59,6 +59,17 @@ void ffmpegBegin(CodecState& state) {
     cmd += std::format(L"-vf \"vflip\" -an {}", pathEscaper.str());
 
     state.ffmpegProcess = std::make_unique<subprocess::Popen>(cmd);
+
+    // Set the video file path in tmaudio.dll
+    HMODULE hTMAudio = LoadLibraryW(L"tmaudio.dll");
+    if (hTMAudio) {
+        typedef void (*SetVideoFilePathFunc)(const wchar_t*); 
+        SetVideoFilePathFunc pSetVideoFilePath = (SetVideoFilePathFunc)GetProcAddress(hTMAudio, "SetVideoFilePath");
+        
+        if (pSetVideoFilePath) {
+            pSetVideoFilePath(state.path.c_str());
+        }
+    }
 }
 
 extern "C" LRESULT WINAPI DriverProc(

@@ -1,7 +1,10 @@
 #include <windows.h>
 #include <dsound.h>
 #include <atomic>
+#include <string>
+#include <format>
 #include "MinHook.h"
+#include "subprocess.hpp"
 
 #define MINIAUDIO_IMPLEMENTATION
 #include "miniaudio.h"
@@ -10,10 +13,60 @@ static std::atomic_bool g_isRecording = false;
 static ma_encoder g_encoder;
 static ma_device g_device;
 static bool g_deviceInitialized = false;
+static std::string g_outputPath = "c:\\temp\\output.wav";
+static std::string g_videoPath = "";
 
 // Interfacing with the main application
+std::string wideToUtf8(std::wstring_view path) {
+    // geode::utils::string::wideToUtf8
+    int count = WideCharToMultiByte(CP_UTF8, 0, path.data(), path.size(), NULL, 0, NULL, NULL);
+    std::string str(count, 0);
+    WideCharToMultiByte(CP_UTF8, 0, path.data(), path.size(), &str[0], count, NULL, NULL);
+    return str;
+}
 
-// exported func that takes a wstring
+std::wstring utf8ToWide(std::string_view str) {
+    // geode::utils::string::utf8ToWide
+    int count = MultiByteToWideChar(CP_UTF8, 0, str.data(), str.size(), NULL, 0);
+    std::wstring wstr(count, 0);
+    MultiByteToWideChar(CP_UTF8, 0, str.data(), str.size(), &wstr[0], count);
+    return wstr;
+}
+
+extern "C" __declspec(dllexport) void SetOutputFilePath(const wchar_t* path) {
+    if (g_isRecording) {
+        return;
+    }
+
+    g_outputPath = wideToUtf8(path);
+}
+
+extern "C" __declspec(dllexport) void SetVideoFilePath(const wchar_t* path) {
+    if (g_isRecording) {
+        return;
+    }
+
+    g_videoPath = wideToUtf8(path);
+    SetOutputFilePath(std::format(L"{}_audio.wav", path).c_str());
+}
+
+void muxAudio() {
+    if (!g_videoPath.empty() && !g_outputPath.empty()) {
+        std::wstring tmpVideoPath = utf8ToWide(g_videoPath) + L"_tmp";
+        MoveFileExW(utf8ToWide(g_videoPath).c_str(), tmpVideoPath.c_str(), MOVEFILE_REPLACE_EXISTING);
+
+        std::wstring cmd = std::format(
+            L"\"ffmpeg\" -y -i \"{}\" -i \"{}\" -c:v copy -c:a aac -b:a 320k -af apad -shortest \"{}\"", 
+            tmpVideoPath, utf8ToWide(g_outputPath), utf8ToWide(g_videoPath)
+        );
+
+        subprocess::Popen muxProcess(cmd);
+        muxProcess.wait(); 
+
+        DeleteFileW(tmpVideoPath.c_str());
+        DeleteFileW(utf8ToWide(g_outputPath).c_str());
+    }
+}
 
 // Recording logic
 void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount)
@@ -57,7 +110,7 @@ HRESULT WINAPI Hooked_Start(LPDIRECTSOUNDCAPTUREBUFFER pThis, DWORD dwFlags)
     OutputDebugStringA("[TMAudio] Recording STARTED!");
     
     if (!g_isRecording) {
-        const char* outputFile = "c:\\temp\\output.wav";
+        const char* outputFile = g_outputPath.c_str();
         ma_encoder_config encoderConfig = ma_encoder_config_init(ma_encoding_format_wav, ma_format_f32, 2, 48000);
         
         if (ma_encoder_init_file(outputFile, &encoderConfig, &g_encoder) == MA_SUCCESS) {
@@ -77,6 +130,8 @@ HRESULT WINAPI Hooked_Stop(LPDIRECTSOUNDCAPTUREBUFFER pThis)
         Sleep(20); 
         
         ma_encoder_uninit(&g_encoder);
+
+        muxAudio();
     }
 
     return Original_Stop(pThis);
