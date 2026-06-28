@@ -1,20 +1,21 @@
 #include <windows.h>
 #include <dsound.h>
+#include <atomic>
 #include "MinHook.h"
 
 #define MINIAUDIO_IMPLEMENTATION
 #include "miniaudio.h"
 
-volatile LONG g_isRecording = 0;
-ma_encoder encoder;
-ma_device device;
-BOOL g_deviceInitialized = FALSE;
+static std::atomic_bool g_isRecording = false;
+static ma_encoder g_encoder;
+static ma_device g_device;
+static bool g_deviceInitialized = false;
 
 // Recording logic
 void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount)
 {
-    if (InterlockedCompareExchange(&g_isRecording, 0, 0) == 1 && pInput != NULL) {
-        ma_encoder_write_pcm_frames(&encoder, pInput, frameCount, NULL);
+    if (g_isRecording && pInput != NULL) {
+        ma_encoder_write_pcm_frames(&g_encoder, pInput, frameCount, NULL);
     }
 }
 
@@ -29,9 +30,9 @@ void init_wasapi_device() {
     deviceConfig.dataCallback       = data_callback;
     deviceConfig.performanceProfile = ma_performance_profile_low_latency;
 
-    if (ma_device_init(NULL, &deviceConfig, &device) == MA_SUCCESS) {
-        if (ma_device_start(&device) == MA_SUCCESS) {
-            g_deviceInitialized = TRUE;
+    if (ma_device_init(NULL, &deviceConfig, &g_device) == MA_SUCCESS) {
+        if (ma_device_start(&g_device) == MA_SUCCESS) {
+            g_deviceInitialized = true;
         }
     }
 }
@@ -51,12 +52,12 @@ HRESULT WINAPI Hooked_Start(LPDIRECTSOUNDCAPTUREBUFFER pThis, DWORD dwFlags)
 {
     OutputDebugStringA("[TMAudio] Recording STARTED!");
     
-    if (InterlockedCompareExchange(&g_isRecording, 0, 0) == 0) {
+    if (!g_isRecording) {
         const char* outputFile = "c:\\temp\\output.wav";
         ma_encoder_config encoderConfig = ma_encoder_config_init(ma_encoding_format_wav, ma_format_f32, 2, 48000);
         
-        if (ma_encoder_init_file(outputFile, &encoderConfig, &encoder) == MA_SUCCESS) {
-            InterlockedExchange(&g_isRecording, 1);
+        if (ma_encoder_init_file(outputFile, &encoderConfig, &g_encoder) == MA_SUCCESS) {
+            g_isRecording = true;
         }
     }
 
@@ -67,12 +68,11 @@ HRESULT WINAPI Hooked_Stop(LPDIRECTSOUNDCAPTUREBUFFER pThis)
 {
     OutputDebugStringA("[TMAudio] Recording STOPPED!");
     
-    if (InterlockedCompareExchange(&g_isRecording, 0, 0) == 1) {
-        InterlockedExchange(&g_isRecording, 0);
+    if (g_isRecording.exchange(false)) {
         
         Sleep(20); 
         
-        ma_encoder_uninit(&encoder);
+        ma_encoder_uninit(&g_encoder);
     }
 
     return Original_Stop(pThis);
