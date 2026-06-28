@@ -11,6 +11,10 @@ static ma_encoder g_encoder;
 static ma_device g_device;
 static bool g_deviceInitialized = false;
 
+// Interfacing with the main application
+
+// exported func that takes a wstring
+
 // Recording logic
 void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount)
 {
@@ -123,6 +127,7 @@ HRESULT WINAPI Hooked_DirectSoundCaptureCreate8(LPCGUID pcGuidDevice, LPDIRECTSO
     return hr;
 }
 
+// Setup
 void SetupDirectSoundHook()
 {
     HMODULE hDSound = LoadLibraryA("dsound.dll");

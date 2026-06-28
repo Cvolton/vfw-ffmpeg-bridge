@@ -1,8 +1,9 @@
+#include <iomanip>
 #include <string>
 #include <windows.h>
 #include <vfw.h>
 
-#include <fstream>
+#include <format>
 #include <sstream>
 
 #include "subprocess.hpp"
@@ -23,31 +24,41 @@ struct CodecState {
     std::string bitrate = "0"; 
     std::string extra_args = "-preset p4 -tune hq -rc vbr -cq 28 -spatial-aq 1 -multipass 0 -pix_fmt p010le";*/
 
-    std::string codec = "av1_nvenc";
-    std::string bitrate = "0"; 
-    std::string extra_args = "-preset p1 -tune ull -rc vbr -cq 28 -multipass 0 -pix_fmt yuv420p";
-    std::string path = "c:\\temp\\output.mp4";
+    std::wstring codec = L"av1_nvenc";
+    std::wstring bitrate = L"0"; 
+    std::wstring extra_args = L"-preset p1 -tune ull -rc vbr -cq 28 -multipass 0 -pix_fmt yuv420p";
+    std::wstring path = L"c:\\temp\\output.mp4";
 
-    subprocess::Popen* ffmpegProcess = nullptr;
+    std::unique_ptr<subprocess::Popen> ffmpegProcess = nullptr;
 };
 
-void ffmpegBegin(CodecState* state) {
-    if(state->ffmpegProcess) return;
+void ffmpegBegin(CodecState& state) {
+    if (state.ffmpegProcess) return;
 
-    std::stringstream stream;
-    stream << '"' << "ffmpeg" << '"' << " -y -f rawvideo -pix_fmt bgr24 -s " << state->width << "x" << state->height << " -r " << state->fpsNum << "/" << state->fpsDen
-    << " -i - "; 
-    if (!state->codec.empty())
-        stream << "-c:v " << state->codec << " ";
-    if (!state->bitrate.empty())
-        stream << "-b:v " << state->bitrate << " ";
-    if (!state->extra_args.empty())
-        stream << state->extra_args << " ";
-    else
-        stream << "-pix_fmt yuv420p ";
-    stream << "-vf \"vflip\" -an \"" << state->path << "\" "; // i hope just putting it in "" escapes it
+    // Build the base command
+    std::wstring cmd = std::format(L"\"ffmpeg\" -y -f rawvideo -pix_fmt bgr24 -s {}x{} -r {}/{} -i - ", 
+                                  state.width, state.height, state.fpsNum, state.fpsDen);
 
-    state->ffmpegProcess = new subprocess::Popen(stream.str());
+    if (!state.codec.empty()) {
+        cmd += std::format(L"-c:v {} ", state.codec);
+    }
+    
+    if (!state.bitrate.empty()) {
+        cmd += std::format(L"-b:v {} ", state.bitrate);
+    }
+    
+    if (!state.extra_args.empty()) {
+        cmd += std::format(L"{} ", state.extra_args);
+    } else {
+        cmd += L"-pix_fmt yuv420p ";
+    }
+
+    std::wstringstream pathEscaper;
+    pathEscaper << std::quoted(state.path);
+    
+    cmd += std::format(L"-vf \"vflip\" -an {}", pathEscaper.str());
+
+    state.ffmpegProcess = std::make_unique<subprocess::Popen>(cmd);
 }
 
 extern "C" LRESULT WINAPI DriverProc(
@@ -165,7 +176,7 @@ extern "C" LRESULT WINAPI DriverProc(
             state->frameCount++;*/
 
             // Piping to FFmpeg
-            ffmpegBegin(state);
+            ffmpegBegin(*state);
             state->ffmpegProcess->m_stdin.write(rawPixels, frameSize);
 
             if(state->ffmpegProcess->m_proc_info.hProcess == nullptr) {
@@ -189,8 +200,7 @@ extern "C" LRESULT WINAPI DriverProc(
             if (state->ffmpegProcess->close()) {
                 return ICERR_ERROR;
             }
-            delete state->ffmpegProcess;
-            state->ffmpegProcess = nullptr;
+            state->ffmpegProcess.reset();
             return ICERR_OK; 
         case ICM_COMPRESS_FRAMES_INFO:
         {
@@ -210,25 +220,21 @@ extern "C" LRESULT WINAPI DriverProc(
     return DefDriverProc(dwDriverId, hDriver, uMsg, lParam1, lParam2);
 }
 
-void LoadAdjacentDLL(HMODULE hModule, const char* targetDllName)
+void LoadAdjacentDLL(HMODULE hModule, const wchar_t* targetDllName)
 {
-    char modulePath[MAX_PATH];
+    wchar_t modulePath[MAX_PATH];
     
-    // Get the full absolute path of THIS dll (vfwbrdg.dll)
-    if (GetModuleFileNameA(hModule, modulePath, MAX_PATH) != 0)
+    if (GetModuleFileNameW(hModule, modulePath, MAX_PATH) != 0)
     {
-        std::string path(modulePath);
+        std::wstring path(modulePath);
         
-        // Find the last backslash to isolate the directory
-        size_t lastSlash = path.find_last_of("\\/");
-        if (lastSlash != std::string::npos)
+        size_t lastSlash = path.find_last_of(L"\\/");
+        if (lastSlash != std::wstring::npos)
         {
-            // Extract the directory and append the target DLL name
-            std::string dirPath = path.substr(0, lastSlash + 1);
-            std::string targetDllPath = dirPath + targetDllName;
+            std::wstring dirPath = path.substr(0, lastSlash + 1);
+            std::wstring targetDllPath = dirPath + targetDllName;
             
-            // Load the target DLL using the absolute path
-            LoadLibraryA(targetDllPath.c_str());
+            LoadLibraryW(targetDllPath.c_str());
         }
     }
 }
@@ -239,8 +245,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     {
         DisableThreadLibraryCalls(hModule);
         
-        // Load tmaudio.dll from the exact same folder as vfwbrdg.dll
-        LoadAdjacentDLL(hModule, "tmaudio.dll");
+        LoadAdjacentDLL(hModule, L"tmaudio.dll");
     }
     return TRUE;
 }
