@@ -14,8 +14,10 @@ static std::atomic_bool g_isRecording = false;
 static ma_encoder g_encoder;
 static ma_device g_device;
 static bool g_deviceInitialized = false;
+static bool g_recordedAudio = false;
 static std::string g_outputPath = "c:\\temp\\output.wav";
 static std::string g_videoPath = "";
+static std::wstring g_aviPath = L"";
 
 // Interfacing with the main application
 std::string wideToUtf8(std::wstring_view path) {
@@ -73,7 +75,7 @@ double getMediaDuration(const std::wstring& path) {
 void muxAudio() {
     if (!g_videoPath.empty() && !g_outputPath.empty()) {
         std::wstring wVideoPath = utf8ToWide(g_videoPath);
-        std::wstring wAudioPath = utf8ToWide(g_outputPath);
+        std::wstring wAudioPath = !g_recordedAudio ? g_aviPath : utf8ToWide(g_outputPath);
         
         std::wstring tmpVideoPath = wVideoPath + L"_tmp.mp4"; 
         MoveFileExW(wVideoPath.c_str(), tmpVideoPath.c_str(), MOVEFILE_REPLACE_EXISTING);
@@ -103,6 +105,10 @@ void muxAudio() {
 
         DeleteFileW(tmpVideoPath.c_str());
         DeleteFileW(wAudioPath.c_str());
+
+        g_outputPath.clear();
+        g_aviPath.clear();
+        g_recordedAudio = false;
     }
 }
 
@@ -135,6 +141,8 @@ void init_wasapi_device() {
 
 void start_audio_recording() {
     OutputDebugStringA("[TMAudio] Recording STARTED!");
+
+    g_recordedAudio = true;
     
     if (!g_isRecording) {
         const char* outputFile = g_outputPath.c_str();
@@ -295,6 +303,40 @@ void SetupOpenALHook()
         
         init_wasapi_device();
     }
+}
+
+/**
+ * TM2
+ */
+typedef HANDLE(WINAPI *CREATEFILEW_T)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
+CREATEFILEW_T Original_CreateFileW = nullptr;
+
+HANDLE WINAPI Hooked_CreateFileW(
+    LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode,
+    LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition,
+    DWORD dwFlagsAndAttributes, HANDLE hTemplateFile) 
+{
+    if (lpFileName != nullptr) {
+        std::wstring path(lpFileName);
+        
+        if (path.length() >= 4 && 
+            path.substr(path.length() - 4) == L".avi" && 
+            (dwDesiredAccess & GENERIC_WRITE)
+        ) {
+            g_aviPath = path;
+        }
+    }
+
+    return Original_CreateFileW(lpFileName, dwDesiredAccess, dwShareMode, 
+                                 lpSecurityAttributes, dwCreationDisposition, 
+                                 dwFlagsAndAttributes, hTemplateFile);
+}
+
+void InitializeHook() {
+    if (MH_Initialize() != MH_OK && MH_Initialize() != MH_ERROR_ALREADY_INITIALIZED) return;
+
+    MH_CreateHook(&CreateFileW, &Hooked_CreateFileW, reinterpret_cast<LPVOID*>(&Original_CreateFileW));
+    MH_EnableHook(&CreateFileW);
 }
 
 /**
