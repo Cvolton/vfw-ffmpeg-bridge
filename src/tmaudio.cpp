@@ -4,6 +4,7 @@
 #include <string>
 #include <format>
 #include <fstream>
+#include <vector>
 #include "MinHook.h"
 #include "subprocess.hpp"
 
@@ -18,6 +19,10 @@ static bool g_recordedAudio = false;
 static std::string g_outputPath = "c:\\temp\\output.wav";
 static std::string g_videoPath = "";
 static std::wstring g_aviPath = L"";
+static HANDLE g_aviHandle = INVALID_HANDLE_VALUE;
+
+std::wstring FindActiveAviPath();
+DWORD WINAPI TM2_WaitAndMuxThread(LPVOID lpParam);
 
 // Interfacing with the main application
 std::string wideToUtf8(std::wstring_view path) {
@@ -51,6 +56,12 @@ extern "C" __declspec(dllexport) void SetVideoFilePath(const wchar_t* path) {
 
     g_videoPath = wideToUtf8(path);
     SetOutputFilePath(std::format(L"{}_audio.wav", path).c_str());
+
+    std::wstring activeAvi = FindActiveAviPath();
+    if (!activeAvi.empty()) {
+        std::wstring* pPath = new std::wstring(activeAvi);
+        CreateThread(nullptr, 0, TM2_WaitAndMuxThread, pPath, 0, nullptr);
+    }
 }
 
 double getMediaDuration(const std::wstring& path) {
@@ -306,37 +317,96 @@ void SetupOpenALHook()
 }
 
 /**
- * TM2
+ * Generic approach for ManiaPlanet/TM2020 and non-TrackMania related use cases
  */
-typedef HANDLE(WINAPI *CREATEFILEW_T)(LPCWSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
-CREATEFILEW_T Original_CreateFileW = nullptr;
+#include <winternl.h>
+// Undocumented NT structs to read raw handles
+typedef struct _SYSTEM_HANDLE_TABLE_ENTRY_INFO {
+    USHORT UniqueProcessId;
+    USHORT CreatorBackTraceIndex;
+    UCHAR ObjectTypeIndex;
+    UCHAR HandleAttributes;
+    USHORT HandleValue;
+    PVOID Object;
+    ULONG GrantedAccess;
+} SYSTEM_HANDLE_TABLE_ENTRY_INFO, *PSYSTEM_HANDLE_TABLE_ENTRY_INFO;
 
-HANDLE WINAPI Hooked_CreateFileW(
-    LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode,
-    LPSECURITY_ATTRIBUTES lpSecurityAttributes, DWORD dwCreationDisposition,
-    DWORD dwFlagsAndAttributes, HANDLE hTemplateFile) 
-{
-    if (lpFileName != nullptr) {
-        std::wstring path(lpFileName);
-        
-        if (path.length() >= 4 && 
-            path.substr(path.length() - 4) == L".avi" && 
-            (dwDesiredAccess & GENERIC_WRITE)
-        ) {
-            g_aviPath = path;
+typedef struct _SYSTEM_HANDLE_INFORMATION {
+    ULONG NumberOfHandles;
+    SYSTEM_HANDLE_TABLE_ENTRY_INFO Handles[1];
+} SYSTEM_HANDLE_INFORMATION, *PSYSTEM_HANDLE_INFORMATION;
+
+typedef NTSTATUS(WINAPI* PNtQuerySystemInformation)(ULONG, PVOID, ULONG, PULONG);
+
+std::wstring FindActiveAviPath() {
+    HMODULE hNtDll = GetModuleHandleW(L"ntdll.dll");
+    if (!hNtDll) return L"";
+
+    auto NtQuerySystemInformation = (PNtQuerySystemInformation)GetProcAddress(hNtDll, "NtQuerySystemInformation");
+    if (!NtQuerySystemInformation) return L"";
+
+    ULONG bufferSize = 0x10000;
+    std::vector<BYTE> buffer;
+    NTSTATUS status;
+
+    do {
+        buffer.resize(bufferSize);
+        status = NtQuerySystemInformation(16 /*SystemHandleInformation*/, buffer.data(), bufferSize, &bufferSize);
+    } while (status == 0xC0000004 /*STATUS_INFO_LENGTH_MISMATCH*/);
+
+    if (status != 0) return L"";
+
+    auto handleInfo = reinterpret_cast<PSYSTEM_HANDLE_INFORMATION>(buffer.data());
+    DWORD currentPid = GetCurrentProcessId();
+
+    for (ULONG i = 0; i < handleInfo->NumberOfHandles; i++) {
+        if (handleInfo->Handles[i].UniqueProcessId == currentPid) {
+            HANDLE hFile = reinterpret_cast<HANDLE>(static_cast<ULONG_PTR>(handleInfo->Handles[i].HandleValue));
+            
+            if (GetFileType(hFile) == FILE_TYPE_DISK) {
+                wchar_t path[MAX_PATH];
+                DWORD len = GetFinalPathNameByHandleW(hFile, path, MAX_PATH, FILE_NAME_NORMALIZED);
+                
+                if (len > 0 && len < MAX_PATH) {
+                    std::wstring wpath(path);
+                    if (wpath.find(L"\\\\?\\") == 0) wpath = wpath.substr(4);
+
+                    if (wpath.length() >= 4 && _wcsicmp(wpath.substr(wpath.length() - 4).c_str(), L".avi") == 0) {
+                        return wpath;
+                    }
+                }
+            }
         }
     }
-
-    return Original_CreateFileW(lpFileName, dwDesiredAccess, dwShareMode, 
-                                 lpSecurityAttributes, dwCreationDisposition, 
-                                 dwFlagsAndAttributes, hTemplateFile);
+    return L"";
 }
 
-void InitializeHook() {
-    if (MH_Initialize() != MH_OK && MH_Initialize() != MH_ERROR_ALREADY_INITIALIZED) return;
+DWORD WINAPI TM2_WaitAndMuxThread(LPVOID lpParam) {
+    std::wstring aviPath = *reinterpret_cast<std::wstring*>(lpParam);
+    delete reinterpret_cast<std::wstring*>(lpParam);
 
-    MH_CreateHook(&CreateFileW, &Hooked_CreateFileW, reinterpret_cast<LPVOID*>(&Original_CreateFileW));
-    MH_EnableHook(&CreateFileW);
+    OutputDebugStringW((L"[TMAudio] TM2 Polling Thread Started on: " + aviPath).c_str());
+
+    while (true) {
+        Sleep(500);
+        
+        if (g_recordedAudio) return 0;
+
+        // Attempt to open the AVI file with exclusive access
+        // If the file is still being written to, this will fail
+        HANDLE hTest = CreateFileW(aviPath.c_str(), GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
+        
+        if (hTest != INVALID_HANDLE_VALUE) {
+            CloseHandle(hTest);
+            
+            // The AVI file is now accessible, we can mux now
+            g_aviPath = aviPath;
+            OutputDebugStringA("[TMAudio] TM2 AVI File Unlocked! Muxing...");
+            
+            muxAudio();
+            return 0;
+        }
+    }
 }
 
 /**
