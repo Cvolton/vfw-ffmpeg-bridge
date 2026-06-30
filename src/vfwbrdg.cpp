@@ -18,64 +18,12 @@ static HINSTANCE g_hInstance = nullptr;
 void ffmpegBegin(CodecState& state) {
     if (state.ffmpegProcess) return;
 
-    // Build the base command
-    std::wstring cmd = std::format(L"\"ffmpeg\" -y -f rawvideo -pix_fmt bgr24 -s {}x{} -r {}/{} -i - ", 
-                                  state.width, state.height, state.fpsNum, state.fpsDen);
+    state.ffmpegProcess = std::make_unique<subprocess::Popen>(state.GetFfmpegCommand());
 
-    if (!state.codec.empty()) {
-        cmd += std::format(L"-c:v {} ", state.codec);
-    }
-    
-    if (!state.bitrate.empty()) {
-        cmd += std::format(L"-b:v {} ", state.bitrate);
-    }
-
-    switch(state.qualityMode) {
-        case QualityMode::CBR:
-            cmd += L"-cbr 1 ";
-            break;
-        case QualityMode::VBR:
-            cmd += L"-cbr 0 ";
-            break;
-        case QualityMode::CRF:
-            cmd += std::format(L"-qp {} ", state.qualityValue1);
-            break;
-        case QualityMode::Lossless:
-            cmd += L"-qp 0 ";
-            break;
-    }
-
-    if (!state.preset.empty()) {
-        cmd += std::format(L"-preset {} ", state.preset);
-    }
-
-    if (!state.tune.empty()) {
-        cmd += std::format(L"-tune {} ", state.tune);
-    }
-
-    if (!state.pix_fmt.empty()) {
-        cmd += std::format(L"-pix_fmt {} ", state.pix_fmt);
-    }
-    
-    if (!state.extra_args.empty()) {
-        cmd += std::format(L"{} ", state.extra_args);
-    } else {
-        cmd += L"-pix_fmt yuv420p ";
-    }
-
-    std::wstringstream pathEscaper;
-    pathEscaper << std::quoted(state.path);
-    
-    cmd += std::format(L"-vf \"vflip\" -an {}", pathEscaper.str());
-
-    state.ffmpegProcess = std::make_unique<subprocess::Popen>(cmd);
-
-    // Set the video file path in tmaudio.dll
     HMODULE hTMAudio = LoadLibraryW(L"tmaudio.dll");
     if (hTMAudio) {
         typedef void (*SetVideoFilePathFunc)(const wchar_t*); 
         SetVideoFilePathFunc pSetVideoFilePath = (SetVideoFilePathFunc)GetProcAddress(hTMAudio, "SetVideoFilePath");
-        
         if (pSetVideoFilePath) {
             pSetVideoFilePath(state.path.c_str());
         }

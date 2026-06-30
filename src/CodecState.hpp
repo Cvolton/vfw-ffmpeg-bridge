@@ -1,5 +1,5 @@
 #pragma once
-#include <minwindef.h>
+#include <windows.h>
 #include <string>
 #include <memory>
 #include "subprocess.hpp"
@@ -16,7 +16,7 @@ enum class QualityMode {
     QVBR = 7,    // AMF specific
     HQVBR = 8,   // AMF specific
     HQCBR = 9,   // AMF specific
-    ICQ = 10     // QSV specific Intelligent Constant Quality
+    ICQ = 10     // QSV specific
 };
 
 struct CodecState {
@@ -36,9 +36,11 @@ struct CodecState {
     std::wstring tune = L"ull";
     std::wstring pix_fmt = L"yuv420p";
 
-    std::wstring bitrate = L"0";
     std::wstring extra_args = L"-multipass 0";
     std::wstring path = L"c:\\temp\\output.mp4";
 
     std::unique_ptr<subprocess::Popen> ffmpegProcess = nullptr;
+
+    std::wstring GetQualityFlags();
+    std::wstring GetFfmpegCommand();
 };
