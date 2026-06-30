@@ -2,35 +2,18 @@
 #include <string>
 #include <windows.h>
 #include <vfw.h>
+#include <commctrl.h>
 
 #include <format>
 #include <sstream>
+#include <string_view>
 
 #include "subprocess.hpp"
+#include "resource.h"
+#include "CodecState.hpp"
+#include "BridgeConfig.hpp"
 
-struct CodecState {
-    int width = 0;
-    int height = 0;
-    int frameCount = 0;
-
-    DWORD fpsNum = 24;
-    DWORD fpsDen = 1;
-
-    /*std::string codec = "libx264";
-    std::string bitrate = "100M";
-    std::string extra_args;// = "-preset ultrafast -tune zerolatency";*/
-
-    /*std::string codec = "av1_nvenc";
-    std::string bitrate = "0"; 
-    std::string extra_args = "-preset p4 -tune hq -rc vbr -cq 28 -spatial-aq 1 -multipass 0 -pix_fmt p010le";*/
-
-    std::wstring codec = L"av1_nvenc";
-    std::wstring bitrate = L"0"; 
-    std::wstring extra_args = L"-preset p1 -tune ull -rc vbr -cq 28 -multipass 0 -pix_fmt yuv420p";
-    std::wstring path = L"c:\\temp\\output.mp4";
-
-    std::unique_ptr<subprocess::Popen> ffmpegProcess = nullptr;
-};
+static HINSTANCE g_hInstance = nullptr;
 
 void ffmpegBegin(CodecState& state) {
     if (state.ffmpegProcess) return;
@@ -45,6 +28,33 @@ void ffmpegBegin(CodecState& state) {
     
     if (!state.bitrate.empty()) {
         cmd += std::format(L"-b:v {} ", state.bitrate);
+    }
+
+    switch(state.qualityMode) {
+        case QualityMode::CBR:
+            cmd += L"-cbr 1 ";
+            break;
+        case QualityMode::VBR:
+            cmd += L"-cbr 0 ";
+            break;
+        case QualityMode::CRF:
+            cmd += std::format(L"-qp {} ", state.qualityValue);
+            break;
+        case QualityMode::Lossless:
+            cmd += L"-qp 0 ";
+            break;
+    }
+
+    if (!state.preset.empty()) {
+        cmd += std::format(L"-preset {} ", state.preset);
+    }
+
+    if (!state.tune.empty()) {
+        cmd += std::format(L"-tune {} ", state.tune);
+    }
+
+    if (!state.pix_fmt.empty()) {
+        cmd += std::format(L"-pix_fmt {} ", state.pix_fmt);
     }
     
     if (!state.extra_args.empty()) {
@@ -89,6 +99,11 @@ extern "C" LRESULT WINAPI DriverProc(
             return 1;
 
         case DRV_OPEN: {
+            INITCOMMONCONTROLSEX icex;
+            icex.dwSize = sizeof(INITCOMMONCONTROLSEX);
+            icex.dwICC = ICC_UPDOWN_CLASS | ICC_STANDARD_CLASSES;
+            InitCommonControlsEx(&icex);
+
             return reinterpret_cast<LRESULT>(new CodecState());
         }
 
@@ -226,6 +241,26 @@ extern "C" LRESULT WINAPI DriverProc(
             }
             return ICERR_OK;
         }
+        case ICM_CONFIGURE: {
+            if (lParam1 == static_cast<LPARAM>(-1)) {
+                return ICERR_OK;
+            }
+
+            HWND hParent = reinterpret_cast<HWND>(lParam1);
+            CodecState* state = reinterpret_cast<CodecState*>(dwDriverId);
+
+            if (!state) return ICERR_MEMORY;
+
+            DialogBoxParamW(
+                g_hInstance,
+                MAKEINTRESOURCEW(IDD_CONFIG_DIALOG),
+                hParent,
+                BridgeConfig::ConfigDlgProc,
+                reinterpret_cast<LPARAM>(state)
+            );
+
+            return ICERR_OK;
+        }
     }
 
     return DefDriverProc(dwDriverId, hDriver, uMsg, lParam1, lParam2);
@@ -255,6 +290,8 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
     if (ul_reason_for_call == DLL_PROCESS_ATTACH)
     {
         DisableThreadLibraryCalls(hModule);
+
+        g_hInstance = hModule;
         
         LoadAdjacentDLL(hModule, L"tmaudio.dll");
     }

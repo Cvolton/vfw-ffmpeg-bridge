@@ -18,9 +18,12 @@ target_link_libraries(tmaudio PRIVATE
 add_library(vfwbrdg SHARED 
     src/vfwbrdg.cpp
     src/vfwbrdg.def
+    src/dialog.rc
+    src/BridgeConfig.cpp
 )
 target_link_libraries(vfwbrdg PRIVATE 
     vfw32.lib 
     winmm.lib 
     user32.lib
+    comctl32.lib
 )
