@@ -79,6 +79,31 @@ const wchar_t* GetStringFromQualityMode(QualityMode mode) {
     }
 }
 
+void PopulateCombo(HWND hCombo, const wchar_t* const* items, size_t count, const std::wstring& target, const wchar_t* fallback) {
+    for (size_t i = 0; i < count; ++i) {
+        SendMessageW(hCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(items[i]));
+    }
+    if (target.empty() || SendMessageW(hCombo, CB_SELECTSTRING, static_cast<WPARAM>(-1), reinterpret_cast<LPARAM>(target.c_str())) == CB_ERR) {
+        SendMessageW(hCombo, CB_SELECTSTRING, static_cast<WPARAM>(-1), reinterpret_cast<LPARAM>(fallback));
+    }
+};
+
+void ApplyDefaultQualityValues(HWND hwndDlg) {
+    HWND hQualCombo = GetDlgItem(hwndDlg, IDC_COMBO_QUAL_MODE);
+    
+    wchar_t buffer[32];
+    int selIndex = SendMessageW(hQualCombo, CB_GETCURSEL, 0, 0);
+    if (selIndex == CB_ERR) return;
+    
+    SendMessageW(hQualCombo, CB_GETLBTEXT, selIndex, reinterpret_cast<LPARAM>(buffer));
+    
+    QualityMode mode = GetQualityModeFromString(buffer);
+    QualityDefaults defs = GetDefaultQualityForMode(mode);
+    
+    SetDlgItemInt(hwndDlg, IDC_EDIT_QUAL_VAL1, defs.val1, FALSE);
+    SetDlgItemInt(hwndDlg, IDC_EDIT_QUAL_VAL2, defs.val2, FALSE);
+}
+
 void UpdateQualityInputs(HWND hwndDlg) {
     HWND hQualCombo = GetDlgItem(hwndDlg, IDC_COMBO_QUAL_MODE);
     HWND hVal1 = GetDlgItem(hwndDlg, IDC_EDIT_QUAL_VAL1);
@@ -112,15 +137,6 @@ void UpdateQualityUI(HWND hwndDlg, std::wstring_view encoder, const std::wstring
 
     EnableWindow(hQualCombo, TRUE);
 
-    auto PopulateCombo = [](HWND hCombo, const wchar_t* const* items, size_t count, const std::wstring& target, const wchar_t* fallback) {
-        for (size_t i = 0; i < count; ++i) {
-            SendMessageW(hCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(items[i]));
-        }
-        if (target.empty() || SendMessageW(hCombo, CB_SELECTSTRING, static_cast<WPARAM>(-1), reinterpret_cast<LPARAM>(target.c_str())) == CB_ERR) {
-            SendMessageW(hCombo, CB_SELECTSTRING, static_cast<WPARAM>(-1), reinterpret_cast<LPARAM>(fallback));
-        }
-    };
-
     if (encoder.find(L"x264") != std::wstring_view::npos || encoder.find(L"x265") != std::wstring_view::npos) {
         PopulateCombo(hQualCombo, x264Quals, std::size(x264Quals), savedMode, L"CRF");
     } else if (encoder.find(L"nvenc") != std::wstring_view::npos) {
@@ -138,15 +154,7 @@ void UpdateQualityUI(HWND hwndDlg, std::wstring_view encoder, const std::wstring
 
     UpdateQualityInputs(hwndDlg);
     if (resetValues) {
-        wchar_t currentMode[32];
-        int selIndex = SendMessageW(hQualCombo, CB_GETCURSEL, 0, 0);
-        SendMessageW(hQualCombo, CB_GETLBTEXT, selIndex, reinterpret_cast<LPARAM>(currentMode));
-        
-        QualityMode mode = GetQualityModeFromString(currentMode);
-        QualityDefaults defs = GetDefaultQualityForMode(mode);
-        
-        SetDlgItemInt(hwndDlg, IDC_EDIT_QUAL_VAL1, defs.val1, FALSE);
-        SetDlgItemInt(hwndDlg, IDC_EDIT_QUAL_VAL2, defs.val2, FALSE);
+        ApplyDefaultQualityValues(hwndDlg);
     }
 }
 
@@ -156,15 +164,6 @@ void UpdatePresetTuneUI(HWND hwndDlg, std::wstring_view encoder, const std::wstr
 
     SendMessageW(hPreset, CB_RESETCONTENT, 0, 0);
     SendMessageW(hTune, CB_RESETCONTENT, 0, 0);
-
-    auto PopulateCombo = [](HWND hCombo, const wchar_t* const* items, size_t count, const std::wstring& target, const wchar_t* fallback) {
-        for (size_t i = 0; i < count; ++i) {
-            SendMessageW(hCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(items[i]));
-        }
-        if (target.empty() || SendMessageW(hCombo, CB_SELECTSTRING, static_cast<WPARAM>(-1), reinterpret_cast<LPARAM>(target.c_str())) == CB_ERR) {
-            SendMessageW(hCombo, CB_SELECTSTRING, static_cast<WPARAM>(-1), reinterpret_cast<LPARAM>(fallback));
-        }
-    };
 
     if (encoder == L"Other") {
         EnableWindow(hPreset, FALSE);
@@ -281,6 +280,7 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
 
             if (wmId == IDC_COMBO_QUAL_MODE && wmEvent == CBN_SELCHANGE) {
                 UpdateQualityInputs(hwndDlg);
+                ApplyDefaultQualityValues(hwndDlg);
                 return (INT_PTR)TRUE;
             }
 
