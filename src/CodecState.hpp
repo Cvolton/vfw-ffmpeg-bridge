@@ -5,10 +5,18 @@
 #include "subprocess.hpp"
 
 enum class QualityMode {
+    None = -1,
     CBR = 0,
     VBR = 1,
     CRF = 2,
-    Lossless = 3
+    Lossless = 3,
+    CQP = 4,
+    ABR = 5,
+    VBR_LAT = 6, // AMF specific
+    QVBR = 7,    // AMF specific
+    HQVBR = 8,   // AMF specific
+    HQCBR = 9,   // AMF specific
+    ICQ = 10     // QSV specific Intelligent Constant Quality
 };
 
 struct CodecState {
@@ -19,17 +27,9 @@ struct CodecState {
     DWORD fpsNum = 24;
     DWORD fpsDen = 1;
 
-    /*std::string codec = "libx264";
-    std::string bitrate = "100M";
-    std::string extra_args;// = "-preset ultrafast -tune zerolatency";*/
-
-    /*std::string codec = "av1_nvenc";
-    std::string bitrate = "0"; 
-    std::string extra_args = "-preset p4 -tune hq -rc vbr -cq 28 -spatial-aq 1 -multipass 0 -pix_fmt p010le";*/
-
     std::wstring codec = L"av1_nvenc";
     QualityMode qualityMode = QualityMode::CRF;
-    int qualityValue = 28;
+    int qualityValue1 = 28;
     int qualityValue2 = 0;
 
     std::wstring preset = L"p1";

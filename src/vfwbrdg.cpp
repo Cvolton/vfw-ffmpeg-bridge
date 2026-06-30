@@ -38,7 +38,7 @@ void ffmpegBegin(CodecState& state) {
             cmd += L"-cbr 0 ";
             break;
         case QualityMode::CRF:
-            cmd += std::format(L"-qp {} ", state.qualityValue);
+            cmd += std::format(L"-qp {} ", state.qualityValue1);
             break;
         case QualityMode::Lossless:
             cmd += L"-qp 0 ";
