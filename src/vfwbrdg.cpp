@@ -121,6 +121,10 @@ extern "C" LRESULT WINAPI DriverProc(
             state->height = abs(inFormat->biHeight);
             state->frameCount = 0;
 
+            if(state->selectAuto) {
+                state->SetAutoDefaults();
+            }
+
             return ICERR_OK;
         }
         case ICM_COMPRESS: {

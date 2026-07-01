@@ -45,4 +45,24 @@ struct CodecState {
 
     std::wstring GetQualityFlags();
     std::wstring GetFfmpegCommand();
+    void SetAutoDefaults();
+
+    static constexpr const wchar_t* defaultEncoders[] = {
+        L"h264_nvenc", L"h264_amf", L"h264_qsv", L"h264_vaapi", 
+        L"hevc_nvenc", L"hevc_amf", L"hevc_qsv", L"hevc_vaapi", 
+        L"libx264", L"libx265", L"Other"
+    };
+
+    static constexpr const wchar_t* x264Quals[] = { L"CRF", L"VBR", L"CBR", L"ABR" };
+    static constexpr const wchar_t* nvencQuals[] = { L"CQP", L"VBR", L"CBR", L"Lossless" };
+    static constexpr const wchar_t* amfQuals[] = { L"CBR", L"CQP", L"VBR", L"VBR_LAT", L"QVBR", L"HQVBR", L"HQCBR" };
+    static constexpr const wchar_t* qsvQuals[] = { L"ICQ", L"CQP", L"VBR", L"CBR" };
+    static constexpr const wchar_t* vaapiQuals[] = { L"CQP", L"VBR", L"CBR" };
 };
+
+using QualityDefaults = std::pair<int, int>;
+namespace QualityUtils {
+    QualityDefaults GetDefaultQualityForMode(QualityMode mode);
+    QualityMode GetQualityModeFromString(const std::wstring& modeStr);
+    const wchar_t* GetStringFromQualityMode(QualityMode mode);
+}

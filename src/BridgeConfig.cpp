@@ -5,12 +5,6 @@
 #include <string>
 #include "resource.h"
 
-static constexpr const wchar_t* defaultEncoders[] = {
-    L"h264_nvenc", L"h264_amf", L"h264_qsv", L"h264_vaapi", 
-    L"hevc_nvenc", L"hevc_amf", L"hevc_qsv", L"hevc_vaapi", 
-    L"libx264", L"libx265", L"Other"
-};
-
 static constexpr const wchar_t* qsvPresets[] = { L"veryfast", L"faster", L"fast", L"medium", L"slow", L"slower", L"veryslow" };
 static constexpr const wchar_t* amfPresets[] = { L"quality", L"balanced", L"speed" };
 static constexpr const wchar_t* nvencPresets[] = { L"p1", L"p2", L"p3", L"p4", L"p5", L"p6", L"p7" };
@@ -20,64 +14,6 @@ static constexpr const wchar_t* nvencTunes[] = { L"(none)", L"ull", L"ll", L"hq"
 static constexpr const wchar_t* x264Tunes[] = { L"(none)", L"film", L"animation", L"grain", L"stillimage", L"psnr", L"ssim", L"fastdecode", L"zerolatency" };
 
 static constexpr const wchar_t* pixelFormats[] = { L"yuv420p", L"yuv422p", L"yuv444p", L"nv12", L"nv16", L"nv21", L"p010le" };
-
-static constexpr const wchar_t* x264Quals[] = { L"CRF", L"VBR", L"CBR", L"ABR" };
-static constexpr const wchar_t* nvencQuals[] = { L"CQP", L"VBR", L"CBR", L"Lossless" };
-static constexpr const wchar_t* amfQuals[] = { L"CBR", L"CQP", L"VBR", L"VBR_LAT", L"QVBR", L"HQVBR", L"HQCBR" };
-static constexpr const wchar_t* qsvQuals[] = { L"ICQ", L"CQP", L"VBR", L"CBR" };
-static constexpr const wchar_t* vaapiQuals[] = { L"CQP", L"VBR", L"CBR" };
-
-struct QualityDefaults { int val1; int val2; };
-
-QualityDefaults GetDefaultQualityForMode(QualityMode mode) {
-    switch (mode) {
-        case QualityMode::CBR:      return { 16000, 0 };
-        case QualityMode::VBR:      return { 16000, 24000 };
-        case QualityMode::CRF:      return { 18, 0 };
-        case QualityMode::Lossless: return { 0, 0 };
-        case QualityMode::CQP:      return { 18, 0 };
-        case QualityMode::ABR:      return { 16000, 0 };
-        case QualityMode::VBR_LAT:  return { 16000, 24000 };
-        case QualityMode::QVBR:     return { 16000, 24000 };
-        case QualityMode::HQVBR:    return { 16000, 24000 };
-        case QualityMode::HQCBR:    return { 16000, 0 };
-        case QualityMode::ICQ:      return { 18, 0 };
-        default:                    return { 0, 0 };
-    }
-}
-
-QualityMode GetQualityModeFromString(const std::wstring& modeStr) {
-    if (modeStr == L"CBR") return QualityMode::CBR;
-    if (modeStr == L"VBR") return QualityMode::VBR;
-    if (modeStr == L"CRF") return QualityMode::CRF;
-    if (modeStr == L"Lossless") return QualityMode::Lossless;
-    if (modeStr == L"CQP") return QualityMode::CQP;
-    if (modeStr == L"ABR") return QualityMode::ABR;
-    if (modeStr == L"VBR_LAT") return QualityMode::VBR_LAT;
-    if (modeStr == L"QVBR") return QualityMode::QVBR;
-    if (modeStr == L"HQVBR") return QualityMode::HQVBR;
-    if (modeStr == L"HQCBR") return QualityMode::HQCBR;
-    if (modeStr == L"ICQ") return QualityMode::ICQ;
-
-    return QualityMode::None;
-}
-
-const wchar_t* GetStringFromQualityMode(QualityMode mode) {
-    switch (mode) {
-        case QualityMode::CBR: return L"CBR";
-        case QualityMode::VBR: return L"VBR";
-        case QualityMode::CRF: return L"CRF";
-        case QualityMode::Lossless: return L"Lossless";
-        case QualityMode::CQP: return L"CQP";
-        case QualityMode::ABR: return L"ABR";
-        case QualityMode::VBR_LAT: return L"VBR_LAT";
-        case QualityMode::QVBR: return L"QVBR";
-        case QualityMode::HQVBR: return L"HQVBR";
-        case QualityMode::HQCBR: return L"HQCBR";
-        case QualityMode::ICQ: return L"ICQ";
-        default: return L"";
-    }
-}
 
 void PopulateCombo(HWND hCombo, const wchar_t* const* items, size_t count, const std::wstring& target, const wchar_t* fallback) {
     for (size_t i = 0; i < count; ++i) {
@@ -97,11 +33,11 @@ void ApplyDefaultQualityValues(HWND hwndDlg) {
     
     SendMessageW(hQualCombo, CB_GETLBTEXT, selIndex, reinterpret_cast<LPARAM>(buffer));
     
-    QualityMode mode = GetQualityModeFromString(buffer);
-    QualityDefaults defs = GetDefaultQualityForMode(mode);
+    QualityMode mode = QualityUtils::GetQualityModeFromString(buffer);
+    QualityDefaults defs = QualityUtils::GetDefaultQualityForMode(mode);
     
-    SetDlgItemInt(hwndDlg, IDC_EDIT_QUAL_VAL1, defs.val1, FALSE);
-    SetDlgItemInt(hwndDlg, IDC_EDIT_QUAL_VAL2, defs.val2, FALSE);
+    SetDlgItemInt(hwndDlg, IDC_EDIT_QUAL_VAL1, defs.first, FALSE);
+    SetDlgItemInt(hwndDlg, IDC_EDIT_QUAL_VAL2, defs.second, FALSE);
 }
 
 void UpdateQualityInputs(HWND hwndDlg) {
@@ -138,15 +74,15 @@ void UpdateQualityUI(HWND hwndDlg, std::wstring_view encoder, const std::wstring
     EnableWindow(hQualCombo, TRUE);
 
     if (encoder.find(L"x264") != std::wstring_view::npos || encoder.find(L"x265") != std::wstring_view::npos) {
-        PopulateCombo(hQualCombo, x264Quals, std::size(x264Quals), savedMode, L"CRF");
+        PopulateCombo(hQualCombo, CodecState::x264Quals, std::size(CodecState::x264Quals), savedMode, L"CRF");
     } else if (encoder.find(L"nvenc") != std::wstring_view::npos) {
-        PopulateCombo(hQualCombo, nvencQuals, std::size(nvencQuals), savedMode, L"CQP");
+        PopulateCombo(hQualCombo, CodecState::nvencQuals, std::size(CodecState::nvencQuals), savedMode, L"CQP");
     } else if (encoder.find(L"amf") != std::wstring_view::npos) {
-        PopulateCombo(hQualCombo, amfQuals, std::size(amfQuals), savedMode, L"VBR");
+        PopulateCombo(hQualCombo, CodecState::amfQuals, std::size(CodecState::amfQuals), savedMode, L"VBR");
     } else if (encoder.find(L"qsv") != std::wstring_view::npos) {
-        PopulateCombo(hQualCombo, qsvQuals, std::size(qsvQuals), savedMode, L"ICQ");
+        PopulateCombo(hQualCombo, CodecState::qsvQuals, std::size(CodecState::qsvQuals), savedMode, L"ICQ");
     } else if (encoder.find(L"vaapi") != std::wstring_view::npos) {
-        PopulateCombo(hQualCombo, vaapiQuals, std::size(vaapiQuals), savedMode, L"CQP");
+        PopulateCombo(hQualCombo, CodecState::vaapiQuals, std::size(CodecState::vaapiQuals), savedMode, L"CQP");
     } else {
         EnableWindow(hQualCombo, FALSE);
         PopulateCombo(hQualCombo, nullptr, 0, L"", L"");
@@ -278,28 +214,28 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
             HWND hEncoderCustom = GetDlgItem(hwndDlg, IDC_EDIT_ENC_CUSTOM);
             
             int matchIndex = -1;
-            for (int i = 0; i < std::size(defaultEncoders); ++i) {
-                SendMessageW(hEncoderCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(defaultEncoders[i]));
-                if (state->codec == defaultEncoders[i]) {
+            for (int i = 0; i < std::size(CodecState::defaultEncoders); ++i) {
+                SendMessageW(hEncoderCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(CodecState::defaultEncoders[i]));
+                if (state->codec == CodecState::defaultEncoders[i]) {
                     matchIndex = i;
                 }
             }
             
             // Defaults
             std::wstring_view activeEncoderUI;
-            if (matchIndex != -1 && matchIndex != (std::size(defaultEncoders) - 1)) {
+            if (matchIndex != -1 && matchIndex != (std::size(CodecState::defaultEncoders) - 1)) {
                 SendMessageW(hEncoderCombo, CB_SETCURSEL, matchIndex, 0);
-                activeEncoderUI = defaultEncoders[matchIndex];
+                activeEncoderUI = CodecState::defaultEncoders[matchIndex];
                 EnableWindow(hEncoderCustom, FALSE);
             } else {
-                SendMessageW(hEncoderCombo, CB_SETCURSEL, std::size(defaultEncoders) - 1, 0); 
+                SendMessageW(hEncoderCombo, CB_SETCURSEL, std::size(CodecState::defaultEncoders) - 1, 0); 
                 EnableWindow(hEncoderCustom, TRUE); 
                 SetWindowTextW(hEncoderCustom, state->codec.c_str()); 
                 activeEncoderUI = L"Other";
             }
             
             UpdatePresetTuneUI(hwndDlg, activeEncoderUI, state->preset, state->tune);
-            UpdateQualityUI(hwndDlg, activeEncoderUI, GetStringFromQualityMode(state->qualityMode), false);
+            UpdateQualityUI(hwndDlg, activeEncoderUI, QualityUtils::GetStringFromQualityMode(state->qualityMode), false);
             
             SetDlgItemInt(hwndDlg, IDC_EDIT_QUAL_VAL1, state->qualityValue1, FALSE);
             SetDlgItemInt(hwndDlg, IDC_EDIT_QUAL_VAL2, state->qualityValue2, FALSE);
@@ -404,7 +340,7 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
                     selIndex = SendMessageW(hQualCombo, CB_GETCURSEL, 0, 0);
                     if (selIndex != CB_ERR) {
                         SendMessageW(hQualCombo, CB_GETLBTEXT, selIndex, reinterpret_cast<LPARAM>(buffer));
-                        state->qualityMode = GetQualityModeFromString(buffer);
+                        state->qualityMode = QualityUtils::GetQualityModeFromString(buffer);
                     }
 
                     BOOL success = FALSE;
