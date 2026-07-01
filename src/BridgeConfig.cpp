@@ -197,6 +197,62 @@ void UpdatePresetTuneUI(HWND hwndDlg, std::wstring_view encoder, const std::wstr
     }
 }
 
+void UpdateModeUI(HWND hwndDlg, bool autoMode) {
+    HWND hEncoderCombo = GetDlgItem(hwndDlg, IDC_COMBO_ENCODER);
+    HWND hEncoderCustom = GetDlgItem(hwndDlg, IDC_EDIT_ENC_CUSTOM);
+    HWND hExtraArgs = GetDlgItem(hwndDlg, IDC_EDIT_EXTRA_ARGS);
+    HWND hPixFmtCombo = GetDlgItem(hwndDlg, IDC_COMBO_PIXFMT);
+    HWND hQualCombo = GetDlgItem(hwndDlg, IDC_COMBO_QUAL_MODE);
+    HWND hPresetCombo = GetDlgItem(hwndDlg, IDC_COMBO_PRESET);
+    HWND hTuneCombo = GetDlgItem(hwndDlg, IDC_COMBO_TUNE);
+
+    EnableWindow(hEncoderCombo, !autoMode);
+    EnableWindow(hExtraArgs, !autoMode);
+    EnableWindow(hPixFmtCombo, !autoMode);
+
+    if (autoMode) {
+        EnableWindow(hEncoderCustom, FALSE);
+        EnableWindow(hQualCombo, FALSE);
+        EnableWindow(GetDlgItem(hwndDlg, IDC_EDIT_QUAL_VAL1), FALSE);
+        EnableWindow(GetDlgItem(hwndDlg, IDC_SPIN_QUAL_VAL1), FALSE);
+        EnableWindow(GetDlgItem(hwndDlg, IDC_EDIT_QUAL_VAL2), FALSE);
+        EnableWindow(GetDlgItem(hwndDlg, IDC_SPIN_QUAL_VAL2), FALSE);
+        EnableWindow(hPresetCombo, FALSE);
+        EnableWindow(hTuneCombo, FALSE);
+        return;
+    }
+
+    wchar_t encoderBuf[64] = {};
+    int selIndex = SendMessageW(hEncoderCombo, CB_GETCURSEL, 0, 0);
+    if (selIndex != CB_ERR) {
+        SendMessageW(hEncoderCombo, CB_GETLBTEXT, selIndex, reinterpret_cast<LPARAM>(encoderBuf));
+    }
+    std::wstring_view encoderView(encoderBuf);
+
+    EnableWindow(hEncoderCustom, encoderView == L"Other");
+
+    wchar_t presetBuf[64] = {};
+    selIndex = SendMessageW(hPresetCombo, CB_GETCURSEL, 0, 0);
+    if (selIndex != CB_ERR) {
+        SendMessageW(hPresetCombo, CB_GETLBTEXT, selIndex, reinterpret_cast<LPARAM>(presetBuf));
+    }
+
+    wchar_t tuneBuf[64] = {};
+    selIndex = SendMessageW(hTuneCombo, CB_GETCURSEL, 0, 0);
+    if (selIndex != CB_ERR) {
+        SendMessageW(hTuneCombo, CB_GETLBTEXT, selIndex, reinterpret_cast<LPARAM>(tuneBuf));
+    }
+
+    wchar_t qualBuf[32] = {};
+    selIndex = SendMessageW(hQualCombo, CB_GETCURSEL, 0, 0);
+    if (selIndex != CB_ERR) {
+        SendMessageW(hQualCombo, CB_GETLBTEXT, selIndex, reinterpret_cast<LPARAM>(qualBuf));
+    }
+
+    UpdatePresetTuneUI(hwndDlg, encoderView, presetBuf, tuneBuf);
+    UpdateQualityUI(hwndDlg, encoderView, qualBuf, false);
+}
+
 INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
         case WM_INITDIALOG: {
@@ -206,7 +262,8 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
             SetDlgItemTextW(hwndDlg, IDC_EDIT_EXTRA_ARGS, state->extra_args.c_str());
             SetDlgItemTextW(hwndDlg, IDC_EDIT_LOC_PATH, state->path.c_str());
             
-            CheckRadioButton(hwndDlg, IDC_RADIO_AUTO, IDC_RADIO_CUSTOM, IDC_RADIO_CUSTOM);
+            CheckRadioButton(hwndDlg, IDC_RADIO_AUTO, IDC_RADIO_CUSTOM,
+                state->selectAuto ? IDC_RADIO_AUTO : IDC_RADIO_CUSTOM);
             CheckRadioButton(hwndDlg, IDC_RADIO_LOC_ASK, IDC_RADIO_LOC_OTHER, IDC_RADIO_LOC_OTHER);
             
             // Pixel formats
@@ -247,6 +304,8 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
             SetDlgItemInt(hwndDlg, IDC_EDIT_QUAL_VAL1, state->qualityValue1, FALSE);
             SetDlgItemInt(hwndDlg, IDC_EDIT_QUAL_VAL2, state->qualityValue2, FALSE);
             
+            UpdateModeUI(hwndDlg, state->selectAuto);
+            
             return (INT_PTR)TRUE;
         }
 
@@ -254,6 +313,11 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
             CodecState* state = reinterpret_cast<CodecState*>(GetWindowLongPtr(hwndDlg, DWLP_USER));
             int wmId = LOWORD(wParam);
             int wmEvent = HIWORD(wParam);
+
+            if ((wmId == IDC_RADIO_AUTO || wmId == IDC_RADIO_CUSTOM) && wmEvent == BN_CLICKED) {
+                UpdateModeUI(hwndDlg, wmId == IDC_RADIO_AUTO);
+                return (INT_PTR)TRUE;
+            }
 
             if (wmId == IDC_COMBO_ENCODER && wmEvent == CBN_SELCHANGE) {
                 HWND hEncoderCombo = GetDlgItem(hwndDlg, IDC_COMBO_ENCODER);
@@ -287,6 +351,8 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
             switch (wmId) {
                 case IDOK: {
                     wchar_t buffer[512];
+                    
+                    state->selectAuto = (IsDlgButtonChecked(hwndDlg, IDC_RADIO_AUTO) == BST_CHECKED);
                     
                     GetDlgItemTextW(hwndDlg, IDC_EDIT_EXTRA_ARGS, buffer, _countof(buffer));
                     state->extra_args = buffer;

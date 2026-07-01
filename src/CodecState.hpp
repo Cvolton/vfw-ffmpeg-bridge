@@ -27,6 +27,8 @@ struct CodecState {
     DWORD fpsNum = 24;
     DWORD fpsDen = 1;
 
+    bool selectAuto = true;
+
     std::wstring codec = L"av1_nvenc";
     QualityMode qualityMode = QualityMode::CRF;
     int qualityValue1 = 28;
