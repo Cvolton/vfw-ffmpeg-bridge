@@ -1,6 +1,7 @@
 #pragma once
 #include <windows.h>
 #include <string>
+#include <string_view>
 #include <memory>
 #include "subprocess.hpp"
 
@@ -65,4 +66,5 @@ namespace QualityUtils {
     QualityDefaults GetDefaultQualityForMode(QualityMode mode);
     QualityMode GetQualityModeFromString(const std::wstring& modeStr);
     const wchar_t* GetStringFromQualityMode(QualityMode mode);
+    QualityMode GetDefaultQualityModeForCodec(std::wstring_view codec);
 }

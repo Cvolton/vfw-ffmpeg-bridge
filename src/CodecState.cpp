@@ -117,9 +117,28 @@ const wchar_t* determineBestCodec(int width, int height) {
     return L"libx264";
 }
 
+QualityMode QualityUtils::GetDefaultQualityModeForCodec(std::wstring_view codec) {
+    if (codec.find(L"x264") != std::wstring_view::npos || codec.find(L"x265") != std::wstring_view::npos) {
+        return QualityMode::CRF;
+    }
+    if (codec.find(L"nvenc") != std::wstring_view::npos) {
+        return QualityMode::CQP;
+    }
+    if (codec.find(L"amf") != std::wstring_view::npos) {
+        return QualityMode::VBR;
+    }
+    if (codec.find(L"qsv") != std::wstring_view::npos) {
+        return QualityMode::ICQ;
+    }
+    if (codec.find(L"vaapi") != std::wstring_view::npos) {
+        return QualityMode::CQP;
+    }
+    return QualityMode::None;
+}
+
 void CodecState::SetAutoDefaults() {
     this->codec = determineBestCodec(this->width ? this->width : 1920, this->height ? this->height : 1080);
-    this->qualityMode = QualityMode::CRF;
+    this->qualityMode = QualityUtils::GetDefaultQualityModeForCodec(this->codec);
     std::tie(this->qualityValue1, this->qualityValue2) = QualityUtils::GetDefaultQualityForMode(this->qualityMode);
     this->preset = L"";
     this->tune = L"";

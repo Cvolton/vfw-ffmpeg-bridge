@@ -73,16 +73,18 @@ void UpdateQualityUI(HWND hwndDlg, std::wstring_view encoder, const std::wstring
 
     EnableWindow(hQualCombo, TRUE);
 
+    const wchar_t* fallback = QualityUtils::GetStringFromQualityMode(QualityUtils::GetDefaultQualityModeForCodec(encoder));
+
     if (encoder.find(L"x264") != std::wstring_view::npos || encoder.find(L"x265") != std::wstring_view::npos) {
-        PopulateCombo(hQualCombo, CodecState::x264Quals, std::size(CodecState::x264Quals), savedMode, L"CRF");
+        PopulateCombo(hQualCombo, CodecState::x264Quals, std::size(CodecState::x264Quals), savedMode, fallback);
     } else if (encoder.find(L"nvenc") != std::wstring_view::npos) {
-        PopulateCombo(hQualCombo, CodecState::nvencQuals, std::size(CodecState::nvencQuals), savedMode, L"CQP");
+        PopulateCombo(hQualCombo, CodecState::nvencQuals, std::size(CodecState::nvencQuals), savedMode, fallback);
     } else if (encoder.find(L"amf") != std::wstring_view::npos) {
-        PopulateCombo(hQualCombo, CodecState::amfQuals, std::size(CodecState::amfQuals), savedMode, L"VBR");
+        PopulateCombo(hQualCombo, CodecState::amfQuals, std::size(CodecState::amfQuals), savedMode, fallback);
     } else if (encoder.find(L"qsv") != std::wstring_view::npos) {
-        PopulateCombo(hQualCombo, CodecState::qsvQuals, std::size(CodecState::qsvQuals), savedMode, L"ICQ");
+        PopulateCombo(hQualCombo, CodecState::qsvQuals, std::size(CodecState::qsvQuals), savedMode, fallback);
     } else if (encoder.find(L"vaapi") != std::wstring_view::npos) {
-        PopulateCombo(hQualCombo, CodecState::vaapiQuals, std::size(CodecState::vaapiQuals), savedMode, L"CQP");
+        PopulateCombo(hQualCombo, CodecState::vaapiQuals, std::size(CodecState::vaapiQuals), savedMode, fallback);
     } else {
         EnableWindow(hQualCombo, FALSE);
         PopulateCombo(hQualCombo, nullptr, 0, L"", L"");
