@@ -39,7 +39,7 @@ std::wstring CodecState::GetQualityFlags() {
         switch (this->qualityMode) {
             case QualityMode::CBR:      return std::format(L"-rc cbr -b:v {}k", this->qualityValue1);
             case QualityMode::CQP:      return std::format(L"-rc cqp -qp_i {} -qp_p {} -qp_b {}", this->qualityValue1, this->qualityValue1, this->qualityValue1);
-            case QualityMode::VBR:      return std::format(L"-rc vbr -b:v {}k -maxrate:v {}k", this->qualityValue1, this->qualityValue2);
+            case QualityMode::VBR:      return std::format(L"-rc vbr_peak -b:v {}k -maxrate:v {}k", this->qualityValue1, this->qualityValue2);
             case QualityMode::VBR_LAT:  return std::format(L"-rc vbr_lat -b:v {}k -maxrate:v {}k", this->qualityValue1, this->qualityValue2);
             case QualityMode::QVBR:     return std::format(L"-rc qvbr -qvbr_quality {}", this->qualityValue1);
             case QualityMode::HQVBR:    return std::format(L"-rc hqvbr -qvbr_quality {}", this->qualityValue1);
@@ -126,7 +126,7 @@ QualityMode QualityUtils::GetDefaultQualityModeForCodec(std::wstring_view codec)
         return QualityMode::CQP;
     }
     if (codec.find(L"amf") != std::wstring_view::npos) {
-        return QualityMode::VBR;
+        return QualityMode::CQP;
     }
     if (codec.find(L"qsv") != std::wstring_view::npos) {
         return QualityMode::ICQ;
