@@ -151,15 +151,15 @@ QualityDefaults QualityUtils::GetDefaultQualityForMode(QualityMode mode) {
     switch (mode) {
         case QualityMode::CBR:      return { 16000, 0 };
         case QualityMode::VBR:      return { 16000, 24000 };
-        case QualityMode::CRF:      return { 18, 0 };
+        case QualityMode::CRF:      return { 21, 0 };
         case QualityMode::Lossless: return { 0, 0 };
-        case QualityMode::CQP:      return { 18, 0 };
+        case QualityMode::CQP:      return { 24, 0 };
         case QualityMode::ABR:      return { 16000, 0 };
         case QualityMode::VBR_LAT:  return { 16000, 24000 };
         case QualityMode::QVBR:     return { 16000, 24000 };
         case QualityMode::HQVBR:    return { 16000, 24000 };
         case QualityMode::HQCBR:    return { 16000, 0 };
-        case QualityMode::ICQ:      return { 18, 0 };
+        case QualityMode::ICQ:      return { 24, 0 };
         default:                    return { 0, 0 };
     }
 }
