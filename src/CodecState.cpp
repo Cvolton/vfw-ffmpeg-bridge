@@ -3,6 +3,7 @@
 
 #include <string>
 #include <format>
+#include <vector>
 #include <sstream>
 #include <iomanip>
 
@@ -194,4 +195,85 @@ const wchar_t* QualityUtils::GetStringFromQualityMode(QualityMode mode) {
         case QualityMode::ICQ: return L"ICQ";
         default: return L"";
     }
+}
+
+static constexpr const size_t SERIALIZER_VERSION = 1;
+
+template<typename T>
+void appendPrimitiveToBuffer(std::vector<uint8_t>& buffer, const T& data) {
+    const uint8_t* byteData = reinterpret_cast<const uint8_t*>(&data);
+    buffer.insert(buffer.end(), byteData, byteData + sizeof(T));
+}
+
+void appendWstringToBuffer(std::vector<uint8_t>& buffer, const std::wstring& str) {
+    size_t len = str.size();
+    appendPrimitiveToBuffer(buffer, len);
+    buffer.insert(buffer.end(), reinterpret_cast<const uint8_t*>(str.data()), reinterpret_cast<const uint8_t*>(str.data()) + len * sizeof(wchar_t));
+}
+
+//for ICM_GETSTATE
+std::vector<uint8_t> CodecState::Serialize() {
+    std::vector<uint8_t> buffer;
+    appendPrimitiveToBuffer(buffer, SERIALIZER_VERSION);
+
+    appendWstringToBuffer(buffer, this->codec);
+    appendWstringToBuffer(buffer, this->preset);
+    appendWstringToBuffer(buffer, this->tune);
+    appendWstringToBuffer(buffer, this->pix_fmt);
+    appendWstringToBuffer(buffer, this->extra_args);
+    appendWstringToBuffer(buffer, this->path);
+
+    appendPrimitiveToBuffer(buffer, this->qualityMode);
+    appendPrimitiveToBuffer(buffer, this->qualityValue1);
+    appendPrimitiveToBuffer(buffer, this->qualityValue2);
+    appendPrimitiveToBuffer(buffer, this->selectAuto);
+
+    return buffer;
+}
+
+template <typename T>
+T readPrimitiveFromBuffer(const std::vector<uint8_t>& buffer, size_t& offset) {
+    if (offset + sizeof(T) > buffer.size()) {
+        MessageBoxW(nullptr, L"An error has occured while reading your settings.\n(Attempted buffer overflow in readPrimitiveFromBuffer)", L"Error", MB_OK | MB_ICONERROR);
+        return T{};
+    }
+    T data;
+    std::memcpy(&data, buffer.data() + offset, sizeof(data));
+    offset += sizeof(data);
+    return data;
+}
+
+std::wstring readWstringFromBuffer(const std::vector<uint8_t>& buffer, size_t& offset) {
+    size_t len = readPrimitiveFromBuffer<size_t>(buffer, offset);
+    if (offset + len * sizeof(wchar_t) > buffer.size()) {
+        MessageBoxW(nullptr, L"An error has occured while reading your settings.\n(Attempted buffer overflow in readWstringFromBuffer)", L"Error", MB_OK | MB_ICONERROR);
+        return L"";
+    }
+
+    std::wstring str;
+    str.assign(reinterpret_cast<const wchar_t*>(buffer.data() + offset), len);
+    offset += len * sizeof(wchar_t);
+    return str;
+}
+
+bool CodecState::Deserialize(const std::vector<uint8_t>& data) {
+    size_t offset = 0;
+    size_t version = readPrimitiveFromBuffer<size_t>(data, offset);
+    if (version != SERIALIZER_VERSION) {
+        MessageBoxW(nullptr, L"Saved VfW FFmpeg Bridge settings are incompatible with your current version, they will be reset.", L"Error", MB_OK | MB_ICONERROR);
+        return false;
+    }
+
+    this->codec = std::move(readWstringFromBuffer(data, offset));
+    this->preset = std::move(readWstringFromBuffer(data, offset));
+    this->tune = std::move(readWstringFromBuffer(data, offset));
+    this->pix_fmt = std::move(readWstringFromBuffer(data, offset));
+    this->extra_args = std::move(readWstringFromBuffer(data, offset));
+    this->path = std::move(readWstringFromBuffer(data, offset));
+
+    this->qualityMode = readPrimitiveFromBuffer<QualityMode>(data, offset);
+    this->qualityValue1 = readPrimitiveFromBuffer<int>(data, offset);
+    this->qualityValue2 = readPrimitiveFromBuffer<int>(data, offset);
+    this->selectAuto = readPrimitiveFromBuffer<bool>(data, offset);
+    return true;
 }

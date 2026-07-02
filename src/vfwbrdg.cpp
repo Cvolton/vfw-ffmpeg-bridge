@@ -213,6 +213,42 @@ extern "C" LRESULT WINAPI DriverProc(
 
             return ICERR_OK;
         }
+        case ICM_SETSTATE: {
+            CodecState* state = reinterpret_cast<CodecState*>(dwDriverId);
+            if (!state) return ICERR_MEMORY;
+ 
+            if (lParam1 == 0 || lParam2 == 0) {
+                return 0;
+            }
+
+            std::vector<uint8_t> data(reinterpret_cast<const uint8_t*>(lParam1), reinterpret_cast<const uint8_t*>(lParam1) + lParam2);
+ 
+            if (!state->Deserialize(std::move(data))) {
+                return 0;
+            }
+ 
+            return static_cast<LRESULT>(lParam2);
+        }
+        case ICM_GETSTATE: {
+            CodecState* state = reinterpret_cast<CodecState*>(dwDriverId);
+            if (!state) return ICERR_MEMORY;
+ 
+            auto blob = state->Serialize();
+ 
+            // Query mode - returns the size of the serialized data
+            if (lParam1 == 0) {
+                return static_cast<LRESULT>(blob.size());
+            }
+ 
+            // Copy mode - actually copies the data
+            auto bufferSize = static_cast<DWORD>(lParam2);
+            auto copySize = static_cast<DWORD>((blob.size() < bufferSize) ? blob.size() : bufferSize);
+            if (copySize > 0) {
+                memcpy(reinterpret_cast<void*>(lParam1), blob.data(), copySize);
+            }
+ 
+            return static_cast<LRESULT>(blob.size());
+        }
     }
 
     return DefDriverProc(dwDriverId, hDriver, uMsg, lParam1, lParam2);

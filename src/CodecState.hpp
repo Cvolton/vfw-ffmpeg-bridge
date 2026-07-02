@@ -1,6 +1,7 @@
 #pragma once
 #include <windows.h>
 #include <string>
+#include <vector>
 #include <string_view>
 #include <memory>
 #include "subprocess.hpp"
@@ -47,6 +48,9 @@ struct CodecState {
     std::wstring GetQualityFlags();
     std::wstring GetFfmpegCommand();
     void SetAutoDefaults();
+
+    std::vector<uint8_t> Serialize();
+    bool Deserialize(const std::vector<uint8_t>& data);
 
     static constexpr const wchar_t* defaultEncoders[] = {
         L"h264_nvenc", L"h264_amf", L"h264_qsv", L"h264_vaapi", 
