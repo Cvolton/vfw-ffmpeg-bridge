@@ -6,6 +6,28 @@
 #include <vector>
 #include <sstream>
 #include <iomanip>
+#include <filesystem>
+#include <fstream>
+
+static auto appdataPath = []() -> std::filesystem::path {
+    wchar_t* appdata = nullptr;
+    size_t len = 0;
+    _wdupenv_s(&appdata, &len, L"APPDATA");
+    if (appdata) {
+        std::filesystem::path path(appdata);
+        free(appdata);
+        auto ret = path / "vfw-ffmpeg-bridge";
+
+        std::error_code ec;
+        std::filesystem::create_directories(ret, ec);
+        if (ec) {
+            MessageBoxW(nullptr, L"Failed to create settings directory.", L"VfW FFmpeg Bridge", MB_OK | MB_ICONERROR);
+            return std::filesystem::path();
+        }
+        return ret;
+    }
+    return std::filesystem::path();
+}();
 
 std::wstring formatBitrate(int target, int max) {
     if (max > 0) return std::format(L"-b:v {}k -maxrate:v {}k", target, max);
@@ -276,4 +298,36 @@ bool CodecState::Deserialize(const std::vector<uint8_t>& data) {
     this->qualityValue2 = readPrimitiveFromBuffer<int>(data, offset);
     this->selectAuto = readPrimitiveFromBuffer<bool>(data, offset);
     return true;
+}
+
+static std::filesystem::path settingsFile = appdataPath / "settings.bin";
+
+void CodecState::Save() {
+    auto blob = this->Serialize();
+    std::ofstream ofs(settingsFile, std::ios::binary);
+    if (!ofs) {
+        MessageBoxW(nullptr, L"Failed to open settings file for writing.", L"VfW FFmpeg Bridge", MB_OK | MB_ICONERROR);
+        return;
+    }
+    ofs.write(reinterpret_cast<const char*>(blob.data()), blob.size());
+}
+
+void CodecState::Load() {
+    std::filesystem::path settingsFile = appdataPath / "settings.bin";
+    std::error_code ec;
+    if (!std::filesystem::exists(settingsFile, ec) || ec) {
+        return;
+    }
+
+    std::ifstream ifs(settingsFile, std::ios::binary);
+    if (!ifs) {
+        MessageBoxW(nullptr, L"Failed to open settings file for reading.", L"VfW FFmpeg Bridge", MB_OK | MB_ICONERROR);
+        return;
+    }
+
+    std::vector<uint8_t> blob((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+    if (!this->Deserialize(blob)) {
+        // error box already pops up in deserialize itself
+        return;
+    }
 }

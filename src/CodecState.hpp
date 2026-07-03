@@ -52,6 +52,9 @@ struct CodecState {
     std::vector<uint8_t> Serialize();
     bool Deserialize(const std::vector<uint8_t>& data);
 
+    void Save();
+    void Load();
+
     static constexpr const wchar_t* defaultEncoders[] = {
         L"h264_nvenc", L"h264_amf", L"h264_qsv", L"h264_vaapi", 
         L"hevc_nvenc", L"hevc_amf", L"hevc_qsv", L"hevc_vaapi", 

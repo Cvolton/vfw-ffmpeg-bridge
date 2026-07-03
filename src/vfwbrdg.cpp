@@ -52,11 +52,13 @@ extern "C" LRESULT WINAPI DriverProc(
             icex.dwICC = ICC_UPDOWN_CLASS | ICC_STANDARD_CLASSES;
             InitCommonControlsEx(&icex);
 
-            return reinterpret_cast<LRESULT>(new CodecState());
+            auto state = new CodecState();
+            state->Load();
+
+            return reinterpret_cast<LRESULT>(state);
         }
 
         case DRV_CLOSE: {
-            CodecState* state = reinterpret_cast<CodecState*>(dwDriverId);
             if (state) {
                 delete state;
             }
@@ -233,6 +235,7 @@ extern "C" LRESULT WINAPI DriverProc(
             CodecState* state = reinterpret_cast<CodecState*>(dwDriverId);
             if (!state) return ICERR_MEMORY;
  
+            state->Save();
             auto blob = state->Serialize();
  
             // Query mode - returns the size of the serialized data
