@@ -1,5 +1,6 @@
 #include "CodecState.hpp"
 #include "subprocess.hpp"
+#include "utils.hpp"
 
 #include <string>
 #include <format>
@@ -93,8 +94,8 @@ std::wstring CodecState::GetQualityFlags() {
 }
 
 std::wstring CodecState::GetFfmpegCommand() {
-    std::wstring cmd = std::format(L"\"ffmpeg\" -y -f rawvideo -pix_fmt bgr24 -s {}x{} -r {}/{} -i - ", 
-                                  this->width, this->height, this->fpsNum, this->fpsDen);
+    std::wstring cmd = std::format(L"\"{}\" -y -f rawvideo -pix_fmt bgr24 -s {}x{} -r {}/{} -i - ", 
+                                  this->ffmpegPath, this->width, this->height, this->fpsNum, this->fpsDen);
 
     if (!this->codec.empty()) {
         cmd += std::format(L"-c:v {} ", this->codec);
@@ -330,4 +331,20 @@ void CodecState::Load() {
         // error box already pops up in deserialize itself
         return;
     }
+}
+
+bool CodecState::FindBestFfmpeg() {
+    auto ffmpegProcess = std::make_unique<subprocess::Popen>(L"ffmpeg -version");
+    if (ffmpegProcess->wait() == 0) {
+        this->ffmpegPath = L"ffmpeg";
+        return true;
+    }
+
+    auto adjacentPath = Bridge::GetAdjacentPath(Bridge::g_hInstance, L"ffmpeg.exe");
+    if(!adjacentPath.empty() && std::filesystem::exists(adjacentPath)) {
+        this->ffmpegPath = adjacentPath;
+        return true;
+    }
+
+    return false;
 }

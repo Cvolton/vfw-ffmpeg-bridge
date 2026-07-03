@@ -12,8 +12,7 @@
 #include "resource.h"
 #include "CodecState.hpp"
 #include "BridgeConfig.hpp"
-
-static HINSTANCE g_hInstance = nullptr;
+#include "utils.hpp"
 
 void ffmpegBegin(CodecState& state) {
     if (state.ffmpegProcess) return;
@@ -54,6 +53,9 @@ extern "C" LRESULT WINAPI DriverProc(
 
             auto state = new CodecState();
             state->Load();
+            if(!state->FindBestFfmpeg()) {
+                MessageBoxW(nullptr, L"Failed to find ffmpeg.exe.", L"VfW FFmpeg Bridge", MB_OK | MB_ICONERROR);
+            }
 
             return reinterpret_cast<LRESULT>(state);
         }
@@ -206,7 +208,7 @@ extern "C" LRESULT WINAPI DriverProc(
             if (!state) return ICERR_MEMORY;
 
             DialogBoxParamW(
-                g_hInstance,
+                Bridge::g_hInstance,
                 MAKEINTRESOURCEW(IDD_CONFIG_DIALOG),
                 hParent,
                 BridgeConfig::ConfigDlgProc,
@@ -257,34 +259,15 @@ extern "C" LRESULT WINAPI DriverProc(
     return DefDriverProc(dwDriverId, hDriver, uMsg, lParam1, lParam2);
 }
 
-void LoadAdjacentDLL(HMODULE hModule, const wchar_t* targetDllName)
-{
-    wchar_t modulePath[MAX_PATH];
-    
-    if (GetModuleFileNameW(hModule, modulePath, MAX_PATH) != 0)
-    {
-        std::wstring path(modulePath);
-        
-        size_t lastSlash = path.find_last_of(L"\\/");
-        if (lastSlash != std::wstring::npos)
-        {
-            std::wstring dirPath = path.substr(0, lastSlash + 1);
-            std::wstring targetDllPath = dirPath + targetDllName;
-            
-            LoadLibraryW(targetDllPath.c_str());
-        }
-    }
-}
-
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved)
 {
     if (ul_reason_for_call == DLL_PROCESS_ATTACH)
     {
         DisableThreadLibraryCalls(hModule);
 
-        g_hInstance = hModule;
+        Bridge::g_hInstance = hModule;
         
-        LoadAdjacentDLL(hModule, L"tmaudio.dll");
+        Bridge::LoadAdjacentDLL(hModule, L"tmaudio.dll");
     }
     return TRUE;
 }

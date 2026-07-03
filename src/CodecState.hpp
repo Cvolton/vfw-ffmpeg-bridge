@@ -43,6 +43,7 @@ struct CodecState {
     std::wstring extra_args = L"";
     std::wstring path = L"c:\\temp\\output.mp4";
 
+    std::wstring ffmpegPath = L"ffmpeg";
     std::unique_ptr<subprocess::Popen> ffmpegProcess = nullptr;
 
     std::wstring GetQualityFlags();
@@ -54,6 +55,8 @@ struct CodecState {
 
     void Save();
     void Load();
+
+    bool FindBestFfmpeg();
 
     static constexpr const wchar_t* defaultEncoders[] = {
         L"h264_nvenc", L"h264_amf", L"h264_qsv", L"h264_vaapi", 
