@@ -57,6 +57,15 @@ extern "C" LRESULT WINAPI DriverProc(
                 MessageBoxW(nullptr, L"Failed to find ffmpeg.exe.", L"VfW FFmpeg Bridge", MB_OK | MB_ICONERROR);
             }
 
+            HMODULE hTMAudio = LoadLibraryW(L"tmaudio.dll");
+            if (hTMAudio) {
+                typedef void (*SetFfmpegPathFunc)(const wchar_t*); 
+                SetFfmpegPathFunc pSetFfmpegPath = (SetFfmpegPathFunc)GetProcAddress(hTMAudio, "SetFfmpegPath");
+                if (pSetFfmpegPath) {
+                    pSetFfmpegPath(state->ffmpegPath.c_str());
+                }
+            }
+
             return reinterpret_cast<LRESULT>(state);
         }
 

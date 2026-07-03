@@ -5,6 +5,7 @@
 #include <format>
 #include <fstream>
 #include <vector>
+#include <regex>
 #include "MinHook.h"
 #include "subprocess.hpp"
 
@@ -19,6 +20,7 @@ static bool g_recordedAudio = false;
 static std::string g_outputPath = "c:\\temp\\output.wav";
 static std::string g_videoPath = "";
 static std::wstring g_aviPath = L"";
+static std::wstring g_ffmpeg = L"ffmpeg";
 static HANDLE g_aviHandle = INVALID_HANDLE_VALUE;
 
 std::wstring FindActiveAviPath();
@@ -39,6 +41,10 @@ std::wstring utf8ToWide(std::string_view str) {
     std::wstring wstr(count, 0);
     MultiByteToWideChar(CP_UTF8, 0, str.data(), str.size(), &wstr[0], count);
     return wstr;
+}
+
+extern "C" __declspec(dllexport) void SetFfmpegPath(const wchar_t* path) {
+    g_ffmpeg = path;
 }
 
 extern "C" __declspec(dllexport) void SetOutputFilePath(const wchar_t* path) {
@@ -64,10 +70,26 @@ extern "C" __declspec(dllexport) void SetVideoFilePath(const wchar_t* path) {
     }
 }
 
+double parseFffmpegDuration(const std::string& ffmpeg_output) {
+    // todo-ish: maybe replace with a better regex later but this is good enough for now
+    std::regex duration_regex(R"(Duration: (\d{2}):(\d{2}):(\d{2}\.\d+))");
+    std::smatch match;
+
+    if (std::regex_search(ffmpeg_output, match, duration_regex)) {
+        double hours = std::stod(match[1].str());
+        double minutes = std::stod(match[2].str());
+        double seconds = std::stod(match[3].str());
+
+        return (hours * 3600.0) + (minutes * 60.0) + seconds;
+    }
+
+    return 0.0; 
+}
+
 double getMediaDuration(const std::wstring& path) {
     std::wstring cmd = std::format(
-        L"ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"{}\"", 
-        path
+        L"\"{}\" -i \"{}\" 2>&1", 
+        g_ffmpeg, path
     );
 
     subprocess::Popen proc(cmd, true);
@@ -76,11 +98,7 @@ double getMediaDuration(const std::wstring& path) {
     proc.wait();
     proc.m_stdout.close();
 
-    try {
-        return std::stod(output);
-    } catch (...) {
-        return 0.0;
-    }
+    return parseFffmpegDuration(output);
 }
 
 void muxAudio() {
@@ -100,14 +118,14 @@ void muxAudio() {
         if (diff > 0.0) {
             int delay_ms = static_cast<int>(diff * 1000.0);
             cmd = std::format(
-                L"\"ffmpeg\" -y -i \"{}\" -i \"{}\" -c:v copy -c:a aac -b:a 320k -af \"adelay={}|{},apad\" -shortest \"{}\"", 
-                tmpVideoPath, wAudioPath, delay_ms, delay_ms, wVideoPath
+                L"\"{}\" -y -i \"{}\" -i \"{}\" -c:v copy -c:a aac -b:a 320k -af \"adelay={}|{},apad\" -shortest \"{}\"", 
+                g_ffmpeg, tmpVideoPath, wAudioPath, delay_ms, delay_ms, wVideoPath
             );
         } else {
             double skip_seconds = std::abs(diff);
             cmd = std::format(
-                L"\"ffmpeg\" -y -i \"{}\" -ss {:.3f} -i \"{}\" -c:v copy -c:a aac -b:a 320k -shortest \"{}\"", 
-                tmpVideoPath, skip_seconds, wAudioPath, wVideoPath
+                L"\"{}\" -y -i \"{}\" -ss {:.3f} -i \"{}\" -c:v copy -c:a aac -b:a 320k -shortest \"{}\"", 
+                g_ffmpeg, tmpVideoPath, skip_seconds, wAudioPath, wVideoPath
             );
         }
 
