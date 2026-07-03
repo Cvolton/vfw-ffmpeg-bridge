@@ -96,6 +96,10 @@ namespace subprocess {
         }
 
         int wait() {
+            if (m_proc_info.hProcess == nullptr) {
+                return -1;
+            }
+
             WaitForSingleObject(m_proc_info.hProcess, INFINITE);
             DWORD exit_code;
             GetExitCodeProcess(m_proc_info.hProcess, &exit_code);
