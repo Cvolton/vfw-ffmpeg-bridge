@@ -111,7 +111,7 @@ void muxAudio() {
             );
         }
 
-        subprocess::Popen muxProcess(cmd);
+        subprocess::Popen muxProcess(cmd, false, false, true);
         muxProcess.wait(); 
 
         DeleteFileW(tmpVideoPath.c_str());

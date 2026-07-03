@@ -61,7 +61,7 @@ namespace subprocess {
         PROCESS_INFORMATION m_proc_info{};
     public:
         Popen() {}
-        Popen(const std::wstring& command, bool redirect_output = false) {
+        Popen(const std::wstring& command, bool redirect_output = false, bool redirect_input = false, bool show_window = false) {
             STARTUPINFOW start_info = {};
 
             start_info.cb = sizeof(start_info);
@@ -77,13 +77,19 @@ namespace subprocess {
                 start_info.hStdError = GetStdHandle(STD_ERROR_HANDLE);
             }
 
-            m_stdin = PipePair::create(true);
-            start_info.hStdInput = m_stdin.m_read.handle;
-            m_stdin.m_write.set_inherit(false);
+            if (redirect_input) {
+                m_stdin = PipePair::create(true);
+                start_info.hStdInput = m_stdin.m_read.handle;
+                m_stdin.m_write.set_inherit(false);
+            } else {
+                start_info.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+            }
 
-            CreateProcessW(nullptr, (wchar_t*) command.data(), nullptr, nullptr, true, 0, nullptr, nullptr, &start_info, &m_proc_info);
+            CreateProcessW(nullptr, (wchar_t*) command.data(), nullptr, nullptr, true, 0 | (show_window ? 0 : CREATE_NO_WINDOW), nullptr, nullptr, &start_info, &m_proc_info);
 
-            m_stdin.m_read.close();
+            if (redirect_input) {
+                m_stdin.m_read.close();
+            }
             if (redirect_output) {
                 m_stdout.m_write.close();
             }
