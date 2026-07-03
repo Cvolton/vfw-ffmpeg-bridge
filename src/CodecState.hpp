@@ -31,16 +31,16 @@ struct CodecState {
 
     bool selectAuto = true;
 
-    std::wstring codec = L"av1_nvenc";
+    std::wstring codec = L"libx264";
     QualityMode qualityMode = QualityMode::CRF;
-    int qualityValue1 = 28;
+    int qualityValue1 = 21;
     int qualityValue2 = 0;
 
-    std::wstring preset = L"p1";
-    std::wstring tune = L"ull";
-    std::wstring pix_fmt = L"yuv420p";
+    std::wstring preset = L"";
+    std::wstring tune = L"";
+    std::wstring pix_fmt = L"";
 
-    std::wstring extra_args = L"-multipass 0";
+    std::wstring extra_args = L"";
     std::wstring path = L"c:\\temp\\output.mp4";
 
     std::unique_ptr<subprocess::Popen> ffmpegProcess = nullptr;
