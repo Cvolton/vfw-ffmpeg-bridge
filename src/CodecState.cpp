@@ -94,7 +94,7 @@ std::wstring CodecState::GetQualityFlags() {
 }
 
 std::wstring CodecState::GetFfmpegCommand() {
-    std::wstring cmd = std::format(L"\"{}\" -y -f rawvideo -pix_fmt bgr24 -thread_queue_size 64 -s {}x{} -r {}/{} -i - ", 
+    std::wstring cmd = std::format(L"\"{}\" -y -f rawvideo -pix_fmt bgr24 -s {}x{} -r {}/{} -i - ", 
                                   this->ffmpegPath, this->width, this->height, this->fpsNum, this->fpsDen);
 
     if (!this->codec.empty()) {
