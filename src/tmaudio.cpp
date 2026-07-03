@@ -102,6 +102,12 @@ double getMediaDuration(const std::wstring& path) {
 }
 
 void muxAudio() {
+    static bool isMuxing = false;
+    if (isMuxing) {
+        return;
+    }
+    isMuxing = true;
+
     if (!g_videoPath.empty() && !g_outputPath.empty()) {
         std::wstring wVideoPath = utf8ToWide(g_videoPath);
         std::wstring wAudioPath = !g_recordedAudio ? g_aviPath : utf8ToWide(g_outputPath);
@@ -129,7 +135,7 @@ void muxAudio() {
             );
         }
 
-        subprocess::Popen muxProcess(cmd, false, false, true);
+        subprocess::Popen muxProcess(cmd, false, false, false);
         muxProcess.wait(); 
 
         DeleteFileW(tmpVideoPath.c_str());
@@ -139,6 +145,8 @@ void muxAudio() {
         g_aviPath.clear();
         g_recordedAudio = false;
     }
+
+    isMuxing = false;
 }
 
 // Recording logic

@@ -17,7 +17,7 @@
 void ffmpegBegin(CodecState& state) {
     if (state.ffmpegProcess) return;
 
-    state.ffmpegProcess = std::make_unique<subprocess::Popen>(state.GetFfmpegCommand(), false, true, true);
+    state.ffmpegProcess = std::make_unique<subprocess::Popen>(state.GetFfmpegCommand(), false, true, false);
 
     HMODULE hTMAudio = LoadLibraryW(L"tmaudio.dll");
     if (hTMAudio) {
