@@ -70,6 +70,71 @@ extern "C" __declspec(dllexport) void SetVideoFilePath(const wchar_t* path) {
     }
 }
 
+// partially based on https://stackoverflow.com/a/6202623 (Frererich Raabe : CC BY-SA 3.0)
+struct EnumWindowsCallbackArgs {
+    const DWORD pid;
+    std::vector<HWND> handles;
+
+    EnumWindowsCallbackArgs(DWORD p) : pid(p) {}
+};
+
+static BOOL CALLBACK EnumWindowsCallback( HWND hnd, LPARAM lParam )
+{
+    EnumWindowsCallbackArgs* args = (EnumWindowsCallbackArgs*)lParam;
+
+    DWORD windowPID;
+    GetWindowThreadProcessId(hnd, &windowPID);
+    if (windowPID == args->pid) {
+        args->handles.push_back(hnd);
+    }
+
+    return TRUE;
+}
+
+std::vector<HWND> getToplevelWindows()
+{
+    EnumWindowsCallbackArgs args(GetCurrentProcessId());
+    if (!EnumWindows(&EnumWindowsCallback, (LPARAM) &args)) {
+      return std::vector<HWND>();
+    }
+    return args.handles;
+}
+
+
+static HWND g_mainGameWindow = []() -> HWND {
+    auto windows = getToplevelWindows();
+    for(auto window : windows) {
+        if (!IsWindowVisible(window)) continue;
+        if (GetWindow(window, GW_OWNER) != nullptr) continue;
+        if (GetWindowTextLengthW(window) == 0) continue;
+        return window;
+    }
+    return nullptr;
+}();
+
+void restoreMainGameWindow() {
+    if(!g_mainGameWindow) {
+        return;
+    }
+
+    ShowWindow(g_mainGameWindow, SW_RESTORE);
+
+    // winapi hack that allows us to steal focus
+    // needed to keep older TMs from becoming mute during the recording audio stage
+    HWND curFg = GetForegroundWindow();
+    if (curFg == g_mainGameWindow) {
+        return;
+    }
+    DWORD curFgThread = GetWindowThreadProcessId(curFg, nullptr);
+    DWORD myThread = GetCurrentThreadId();
+
+    BOOL attached = AttachThreadInput(curFgThread, myThread, TRUE);
+    SetForegroundWindow(g_mainGameWindow);
+    if (attached) {
+        AttachThreadInput(curFgThread, myThread, FALSE);
+    }
+}
+
 double parseFffmpegDuration(const std::string& ffmpeg_output) {
     // todo-ish: maybe replace with a better regex later but this is good enough for now
     std::regex duration_regex(R"(Duration: (\d{2}):(\d{2}):(\d{2}\.\d+))");
@@ -182,6 +247,8 @@ void start_audio_recording() {
     g_recordedAudio = true;
     
     if (!g_isRecording) {
+        restoreMainGameWindow();
+
         const char* outputFile = g_outputPath.c_str();
         ma_encoder_config encoderConfig = ma_encoder_config_init(ma_encoding_format_wav, ma_format_s16, 2, 48000);
         
