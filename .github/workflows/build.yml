@@ -13,9 +13,9 @@ jobs:
       matrix:
         config:
         - name: x86
-          platform: x86
-        - name: amd64
-          platform: amd64
+          platform: Win32
+        - name: x64
+          platform: x64
 
     name: Build ${{ matrix.config.name }}
     runs-on: windows-2025
