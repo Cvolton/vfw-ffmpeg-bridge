@@ -8,7 +8,7 @@
 // Location
 #define IDC_RADIO_LOC_ASK           1011
 #define IDC_RADIO_LOC_NEXT          1012
-#define IDC_RADIO_LOC_OTHER         1013
+#define IDC_RADIO_LOC_FOLDER        1013
 #define IDC_EDIT_LOC_PATH           1014
 #define IDC_BTN_LOC_BROWSE          1015
 

@@ -63,11 +63,23 @@ extern "C" __declspec(dllexport) void SetVideoFilePath(const wchar_t* path) {
     g_videoPath = wideToUtf8(path);
     SetOutputFilePath(std::format(L"{}_audio.wav", path).c_str());
 
-    std::wstring activeAvi = FindActiveAviPath();
-    if (!activeAvi.empty()) {
-        std::wstring* pPath = new std::wstring(activeAvi);
-        CreateThread(nullptr, 0, TM2_WaitAndMuxThread, pPath, 0, nullptr);
+    if(g_aviPath.empty()) {
+        g_aviPath = FindActiveAviPath();
     }
+
+    if (!g_aviPath.empty()) {
+        CreateThread(nullptr, 0, TM2_WaitAndMuxThread, nullptr, 0, nullptr);
+    }
+}
+
+extern "C" __declspec(dllexport) const wchar_t* GetAviFilePath() {
+    if (g_aviPath.empty()) {
+        g_aviPath = FindActiveAviPath();
+    }
+    auto ret = new wchar_t[g_aviPath.size() + 1];
+    wcscpy_s(ret, g_aviPath.size() + 1, g_aviPath.c_str());
+    return ret;
+    
 }
 
 // partially based on https://stackoverflow.com/a/6202623 (Frererich Raabe : CC BY-SA 3.0)
@@ -475,10 +487,7 @@ std::wstring FindActiveAviPath() {
 }
 
 DWORD WINAPI TM2_WaitAndMuxThread(LPVOID lpParam) {
-    std::wstring aviPath = *reinterpret_cast<std::wstring*>(lpParam);
-    delete reinterpret_cast<std::wstring*>(lpParam);
-
-    OutputDebugStringW((L"[TMAudio] TM2 Polling Thread Started on: " + aviPath).c_str());
+    OutputDebugStringW((L"[TMAudio] TM2 Polling Thread Started on: " + g_aviPath).c_str());
 
     while (true) {
         Sleep(500);
@@ -487,13 +496,12 @@ DWORD WINAPI TM2_WaitAndMuxThread(LPVOID lpParam) {
 
         // Attempt to open the AVI file with exclusive access
         // If the file is still being written to, this will fail
-        HANDLE hTest = CreateFileW(aviPath.c_str(), GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
+        HANDLE hTest = CreateFileW(g_aviPath.c_str(), GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
         
         if (hTest != INVALID_HANDLE_VALUE) {
             CloseHandle(hTest);
             
             // The AVI file is now accessible, we can mux now
-            g_aviPath = aviPath;
             OutputDebugStringA("[TMAudio] TM2 AVI File Unlocked! Muxing...");
             
             muxAudio();

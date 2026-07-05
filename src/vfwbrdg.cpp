@@ -138,6 +138,12 @@ extern "C" LRESULT WINAPI DriverProc(
                 state->SetAutoDefaults();
             }
 
+            if(!state->SetRenderPath()) {
+                return ICERR_BADPARAM;
+            } else {
+                state->Save();
+            }
+
             return ICERR_OK;
         }
         case ICM_COMPRESS: {

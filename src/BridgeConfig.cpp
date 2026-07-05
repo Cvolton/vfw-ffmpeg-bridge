@@ -1,6 +1,7 @@
 #include "BridgeConfig.hpp"
 #include "CodecState.hpp"
 
+#include <ShObjIdl_core.h>
 #include <string_view>
 #include <string>
 #include "resource.h"
@@ -191,6 +192,20 @@ void UpdateModeUI(HWND hwndDlg, bool autoMode) {
     UpdateQualityUI(hwndDlg, encoderView, qualBuf, false);
 }
 
+void UpdateLocationUI(HWND hwndDlg, LocationSelection selection) {
+    CheckRadioButton(hwndDlg, IDC_RADIO_LOC_ASK, IDC_RADIO_LOC_FOLDER,
+        (selection == LocationSelection::Ask) ? IDC_RADIO_LOC_ASK :
+        (selection == LocationSelection::NextToAvi) ? IDC_RADIO_LOC_NEXT : IDC_RADIO_LOC_FOLDER);
+
+    if (selection == LocationSelection::Folder) {
+        EnableWindow(GetDlgItem(hwndDlg, IDC_EDIT_LOC_PATH), TRUE);
+        EnableWindow(GetDlgItem(hwndDlg, IDC_BTN_LOC_BROWSE), TRUE);
+    } else {
+        EnableWindow(GetDlgItem(hwndDlg, IDC_EDIT_LOC_PATH), FALSE);
+        EnableWindow(GetDlgItem(hwndDlg, IDC_BTN_LOC_BROWSE), FALSE);
+    }
+}
+
 INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
         case WM_INITDIALOG: {
@@ -198,11 +213,11 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
             SetWindowLongPtr(hwndDlg, DWLP_USER, reinterpret_cast<LONG_PTR>(state));
             
             SetDlgItemTextW(hwndDlg, IDC_EDIT_EXTRA_ARGS, state->extra_args.c_str());
-            SetDlgItemTextW(hwndDlg, IDC_EDIT_LOC_PATH, state->path.c_str());
+            SetDlgItemTextW(hwndDlg, IDC_EDIT_LOC_PATH, state->otherLocation.c_str());
             
             CheckRadioButton(hwndDlg, IDC_RADIO_AUTO, IDC_RADIO_CUSTOM,
                 state->selectAuto ? IDC_RADIO_AUTO : IDC_RADIO_CUSTOM);
-            CheckRadioButton(hwndDlg, IDC_RADIO_LOC_ASK, IDC_RADIO_LOC_OTHER, IDC_RADIO_LOC_OTHER);
+            UpdateLocationUI(hwndDlg, state->locationSelection);
             
             // Pixel formats
             HWND hPixFmtCombo = GetDlgItem(hwndDlg, IDC_COMBO_PIXFMT);
@@ -257,6 +272,18 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
                 return (INT_PTR)TRUE;
             }
 
+            if ((wmId == IDC_RADIO_LOC_ASK || wmId == IDC_RADIO_LOC_NEXT || wmId == IDC_RADIO_LOC_FOLDER) && wmEvent == BN_CLICKED) {
+                if (wmId == IDC_RADIO_LOC_ASK) {
+                    state->locationSelection = LocationSelection::Ask;
+                } else if (wmId == IDC_RADIO_LOC_NEXT) {
+                    state->locationSelection = LocationSelection::NextToAvi;
+                } else if (wmId == IDC_RADIO_LOC_FOLDER) {
+                    state->locationSelection = LocationSelection::Folder;
+                }
+                UpdateLocationUI(hwndDlg, state->locationSelection);
+                return (INT_PTR)TRUE;
+            }
+
             if (wmId == IDC_COMBO_ENCODER && wmEvent == CBN_SELCHANGE) {
                 HWND hEncoderCombo = GetDlgItem(hwndDlg, IDC_COMBO_ENCODER);
                 HWND hEncoderCustom = GetDlgItem(hwndDlg, IDC_EDIT_ENC_CUSTOM);
@@ -296,7 +323,7 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
                     state->extra_args = buffer;
                     
                     GetDlgItemTextW(hwndDlg, IDC_EDIT_LOC_PATH, buffer, _countof(buffer));
-                    state->path = buffer;
+                    state->otherLocation = buffer;
                     
                     HWND hEncoderCombo = GetDlgItem(hwndDlg, IDC_COMBO_ENCODER);
                     int selIndex = SendMessageW(hEncoderCombo, CB_GETCURSEL, 0, 0);
@@ -355,6 +382,53 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
                 case IDCANCEL:
                     EndDialog(hwndDlg, IDCANCEL);
                     return (INT_PTR)TRUE;
+                case IDC_BTN_LOC_BROWSE: {
+                    HRESULT hrInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+                    bool comInitializedHere = SUCCEEDED(hrInit);
+                    bool comUsable = SUCCEEDED(hrInit) || hrInit == RPC_E_CHANGED_MODE;
+
+                    if (comUsable) {
+                        IFileOpenDialog* pDialog = nullptr;
+                        HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER,
+                                                    IID_PPV_ARGS(&pDialog));
+
+                        if (SUCCEEDED(hr)) {
+                            DWORD options = 0;
+                            pDialog->GetOptions(&options);
+                            pDialog->SetOptions(options | FOS_PICKFOLDERS | FOS_PATHMUSTEXIST | FOS_FORCEFILESYSTEM);
+
+                            if (!state->otherLocation.empty()) {
+                                IShellItem* pDefaultFolder = nullptr;
+                                if (SUCCEEDED(SHCreateItemFromParsingName(state->otherLocation.c_str(), nullptr, IID_PPV_ARGS(&pDefaultFolder)))) {
+                                    pDialog->SetFolder(pDefaultFolder);
+                                    pDefaultFolder->Release();
+                                }
+                            }
+
+                            hr = pDialog->Show(hwndDlg);
+                            if (SUCCEEDED(hr)) {
+                                IShellItem* pResult = nullptr;
+                                if (SUCCEEDED(pDialog->GetResult(&pResult))) {
+                                    PWSTR path = nullptr;
+                                    if (SUCCEEDED(pResult->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
+                                        state->otherLocation = path;
+                                        SetDlgItemTextW(hwndDlg, IDC_EDIT_LOC_PATH, path);
+                                        CoTaskMemFree(path);
+                                    }
+                                    pResult->Release();
+                                }
+                            }
+
+                            pDialog->Release();
+                        }
+                    }
+
+                    if (comInitializedHere) {
+                        CoUninitialize();
+                    }
+
+                    return (INT_PTR)TRUE;
+                }
             }
             break;
         }

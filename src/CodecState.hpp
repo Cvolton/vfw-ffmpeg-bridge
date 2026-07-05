@@ -21,6 +21,12 @@ enum class QualityMode {
     ICQ = 10     // QSV specific
 };
 
+enum class LocationSelection {
+    Ask,
+    NextToAvi,
+    Folder,
+};
+
 struct CodecState {
     int width = 0;
     int height = 0;
@@ -41,6 +47,10 @@ struct CodecState {
     std::wstring pix_fmt = L"";
 
     std::wstring extra_args = L"";
+
+    LocationSelection locationSelection = LocationSelection::Ask;
+    std::wstring otherLocation = L"";
+
     std::wstring path = L"c:\\temp\\output.mp4";
 
     std::wstring ffmpegPath = L"ffmpeg";
@@ -49,6 +59,7 @@ struct CodecState {
     std::wstring GetQualityFlags();
     std::wstring GetFfmpegCommand();
     void SetAutoDefaults();
+    bool SetRenderPath();
 
     std::vector<uint8_t> Serialize();
     bool Deserialize(const std::vector<uint8_t>& data);
