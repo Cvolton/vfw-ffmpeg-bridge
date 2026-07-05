@@ -1,0 +1,38 @@
+name: Build Binaries
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+    - '**'
+
+jobs:
+  build-msvc:
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+        - name: x86
+          platform: x86
+        - name: amd64
+          platform: amd64
+
+    name: Build ${{ matrix.config.name }}
+    runs-on: windows-2025
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v7
+      with:
+        submodules: recursive
+
+    - name: Configure & Build
+      run: |
+        cmake -G "Visual Studio 17 2022" -B build -DCMAKE_BUILD_TYPE=Release -A ${{ matrix.config.platform }} -S .
+        cmake --build build --config Release
+
+    - name: Upload release build
+      uses: actions/upload-artifact@v7
+      with:
+        name: vfw-ffmpeg-bridge_${{ matrix.config.name }}
+        path: ./build/Release/
