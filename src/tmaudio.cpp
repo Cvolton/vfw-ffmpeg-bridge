@@ -23,6 +23,7 @@ static std::wstring g_aviPath = L"";
 static std::wstring g_ffmpeg = L"ffmpeg";
 static HANDLE g_aviHandle = INVALID_HANDLE_VALUE;
 
+std::wstring FindActivePathForExtension(std::wstring_view extension);
 std::wstring FindActiveAviPath();
 DWORD WINAPI TM2_WaitAndMuxThread(LPVOID lpParam);
 
@@ -443,7 +444,7 @@ typedef struct _SYSTEM_HANDLE_INFORMATION {
 
 typedef NTSTATUS(WINAPI* PNtQuerySystemInformation)(ULONG, PVOID, ULONG, PULONG);
 
-std::wstring FindActiveAviPath() {
+std::wstring FindActivePathForExtension(std::wstring_view extension) {
     HMODULE hNtDll = GetModuleHandleW(L"ntdll.dll");
     if (!hNtDll) return L"";
 
@@ -476,7 +477,7 @@ std::wstring FindActiveAviPath() {
                     std::wstring wpath(path);
                     if (wpath.find(L"\\\\?\\") == 0) wpath = wpath.substr(4);
 
-                    if (wpath.length() >= 4 && _wcsicmp(wpath.substr(wpath.length() - 4).c_str(), L".avi") == 0) {
+                    if (wpath.length() >= extension.length() && _wcsicmp(wpath.substr(wpath.length() - extension.length()).c_str(), extension.data()) == 0) {
                         return wpath;
                     }
                 }
@@ -484,6 +485,10 @@ std::wstring FindActiveAviPath() {
         }
     }
     return L"";
+}
+
+std::wstring FindActiveAviPath() {
+    return FindActivePathForExtension(L".avi");
 }
 
 DWORD WINAPI TM2_WaitAndMuxThread(LPVOID lpParam) {
