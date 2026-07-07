@@ -112,8 +112,9 @@ extern "C" LRESULT WINAPI DriverProc(
             outFormat->biBitCount = 24; 
             outFormat->biCompression = mmioFOURCC('F', 'B', 'R', 'G');
             
-            DWORD rawSize = inFormat->biWidth * abs(inFormat->biHeight) * 3;
-            outFormat->biSizeImage = rawSize + 1024;
+            //DWORD rawSize = inFormat->biWidth * abs(inFormat->biHeight) * 3;
+            //outFormat->biSizeImage = rawSize + 1024;
+            outFormat->biSizeImage = 1024;
 
             outFormat->biXPelsPerMeter = 0;
             outFormat->biYPelsPerMeter = 0;
