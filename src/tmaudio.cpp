@@ -17,6 +17,8 @@ static ma_encoder g_encoder;
 static ma_device g_device;
 static bool g_deviceInitialized = false;
 static bool g_recordedAudio = false;
+static bool g_tmHooksSetup = false;
+static bool g_tmHooksEnabled = false;
 static std::string g_outputPath = "c:\\temp\\output.wav";
 static std::string g_videoPath = "";
 static std::wstring g_aviPath = L"";
@@ -25,7 +27,9 @@ static HANDLE g_aviHandle = INVALID_HANDLE_VALUE;
 
 std::wstring FindActivePathForExtension(std::wstring_view extension);
 std::wstring FindActiveAviPath();
+
 DWORD WINAPI TM2_WaitAndMuxThread(LPVOID lpParam);
+DWORD WINAPI InitHooksThread(LPVOID lpParam);
 
 // Interfacing with the main application
 std::string wideToUtf8(std::wstring_view path) {
@@ -42,6 +46,15 @@ std::wstring utf8ToWide(std::string_view str) {
     std::wstring wstr(count, 0);
     MultiByteToWideChar(CP_UTF8, 0, str.data(), str.size(), &wstr[0], count);
     return wstr;
+}
+
+extern "C" __declspec(dllexport) void EnableTMAudioHooks() {
+    g_tmHooksEnabled = true;
+    CreateThread(nullptr, 0, InitHooksThread, nullptr, 0, nullptr);
+}
+
+extern "C" __declspec(dllexport) void DisableTMAudioHooks() {
+    g_tmHooksEnabled = false;
 }
 
 extern "C" __declspec(dllexport) void SetFfmpegPath(const wchar_t* path) {
@@ -255,6 +268,10 @@ void init_wasapi_device() {
 }
 
 void start_audio_recording() {
+    if(!g_tmHooksEnabled) {
+        return;
+    }
+
     OutputDebugStringA("[TMAudio] Recording STARTED!");
 
     g_recordedAudio = true;
@@ -272,6 +289,10 @@ void start_audio_recording() {
 }
 
 void stop_audio_recording() {
+    if(!g_tmHooksEnabled) {
+        return;
+    }
+
     OutputDebugStringA("[TMAudio] Recording STOPPED!");
     
     if (g_isRecording.exchange(false)) {
@@ -521,8 +542,14 @@ DWORD WINAPI TM2_WaitAndMuxThread(LPVOID lpParam) {
 
 DWORD WINAPI InitHooksThread(LPVOID lpParam)
 {
+    if(g_tmHooksSetup) {
+        return 0;
+    }
+
     SetupDirectSoundHook();
     SetupOpenALHook();
+
+    g_tmHooksSetup = true;
     return 0;
 }
 
@@ -540,7 +567,6 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
             &hDummy
         );
 
-        CreateThread(nullptr, 0, InitHooksThread, nullptr, 0, nullptr);
         break;
         
     case DLL_PROCESS_DETACH:

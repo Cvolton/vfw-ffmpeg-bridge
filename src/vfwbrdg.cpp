@@ -26,6 +26,20 @@ void ffmpegBegin(CodecState& state) {
         if (pSetVideoFilePath) {
             pSetVideoFilePath(state.path.c_str());
         }
+
+        if(state.tmAudioHooks) {
+            typedef void (*EnableTMAudioHooksFunc)(); 
+            EnableTMAudioHooksFunc pEnableTMAudioHooks = (EnableTMAudioHooksFunc)GetProcAddress(hTMAudio, "EnableTMAudioHooks");
+            if (pEnableTMAudioHooks) {
+                pEnableTMAudioHooks();
+            }
+        } else {
+            typedef void (*DisableTMAudioHooksFunc)(); 
+            DisableTMAudioHooksFunc pDisableTMAudioHooks = (DisableTMAudioHooksFunc)GetProcAddress(hTMAudio, "DisableTMAudioHooks");
+            if (pDisableTMAudioHooks) {
+                pDisableTMAudioHooks();
+            }
+        }
     }
 }
 
