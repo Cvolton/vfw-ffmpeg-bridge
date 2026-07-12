@@ -113,6 +113,7 @@ std::wstring CodecState::GetFfmpegCommand() {
     if (!this->pix_fmt.empty()) {
         cmd += std::format(L"-pix_fmt {} ", this->pix_fmt);
     }
+    cmd += L"-vf \"vflip\" -an ";
     
     if (!this->extra_args.empty()) {
         cmd += std::format(L"{} ", this->extra_args);
@@ -120,7 +121,7 @@ std::wstring CodecState::GetFfmpegCommand() {
 
     std::wstringstream pathEscaper;
     pathEscaper << std::quoted(this->path);
-    cmd += std::format(L"-vf \"vflip\" -an {}", pathEscaper.str());
+    cmd += pathEscaper.str();
 
     return cmd;
 }
