@@ -227,7 +227,13 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
             for (const auto& pixFmt : pixelFormats) {
                 SendMessageW(hPixFmtCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(pixFmt));
             }
-            SendMessageW(hPixFmtCombo, CB_SELECTSTRING, static_cast<WPARAM>(-1), reinterpret_cast<LPARAM>(L"yuv420p"));
+            
+            if (
+                state->pix_fmt.empty() ||
+                SendMessageW(hPixFmtCombo, CB_SELECTSTRING, static_cast<WPARAM>(-1), reinterpret_cast<LPARAM>(state->pix_fmt.c_str())) == CB_ERR
+            ) {
+                SendMessageW(hPixFmtCombo, CB_SELECTSTRING, static_cast<WPARAM>(-1), reinterpret_cast<LPARAM>(L"yuv420p"));
+            }
             
             // Encoder
             HWND hEncoderCombo = GetDlgItem(hwndDlg, IDC_COMBO_ENCODER);
