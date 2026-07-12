@@ -313,6 +313,7 @@ std::vector<uint8_t> CodecState::Serialize() {
     appendPrimitiveToBuffer(buffer, this->qualityValue1);
     appendPrimitiveToBuffer(buffer, this->qualityValue2);
     appendPrimitiveToBuffer(buffer, this->selectAuto);
+    appendPrimitiveToBuffer(buffer, this->tmAudioHooks);
     appendPrimitiveToBuffer(buffer, this->locationSelection);
 
     return buffer;
@@ -363,6 +364,7 @@ bool CodecState::Deserialize(const std::vector<uint8_t>& data) {
     this->qualityValue1 = readPrimitiveFromBuffer<int>(data, offset);
     this->qualityValue2 = readPrimitiveFromBuffer<int>(data, offset);
     this->selectAuto = readPrimitiveFromBuffer<bool>(data, offset);
+    this->tmAudioHooks = readPrimitiveFromBuffer<bool>(data, offset);
     this->locationSelection = readPrimitiveFromBuffer<LocationSelection>(data, offset);
     return true;
 }

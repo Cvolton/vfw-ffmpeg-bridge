@@ -36,6 +36,7 @@ struct CodecState {
     DWORD fpsDen = 1;
 
     bool selectAuto = true;
+    bool tmAudioHooks = true;
 
     std::wstring codec = L"libx264";
     QualityMode qualityMode = QualityMode::CRF;

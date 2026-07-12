@@ -32,3 +32,6 @@
 
 // Extra Args
 #define IDC_EDIT_EXTRA_ARGS         1061
+
+// Tweaks
+#define IDC_CHECK_TM_AUDIO_WORKAROUNDS 1071

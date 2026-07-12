@@ -218,6 +218,9 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
             CheckRadioButton(hwndDlg, IDC_RADIO_AUTO, IDC_RADIO_CUSTOM,
                 state->selectAuto ? IDC_RADIO_AUTO : IDC_RADIO_CUSTOM);
             UpdateLocationUI(hwndDlg, state->locationSelection);
+
+            CheckDlgButton(hwndDlg, IDC_CHECK_TM_AUDIO_WORKAROUNDS,
+                state->tmAudioHooks ? BST_CHECKED : BST_UNCHECKED);
             
             // Pixel formats
             HWND hPixFmtCombo = GetDlgItem(hwndDlg, IDC_COMBO_PIXFMT);
@@ -318,6 +321,7 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
                     wchar_t buffer[512];
                     
                     state->selectAuto = (IsDlgButtonChecked(hwndDlg, IDC_RADIO_AUTO) == BST_CHECKED);
+                    state->tmAudioHooks = (IsDlgButtonChecked(hwndDlg, IDC_CHECK_TM_AUDIO_WORKAROUNDS) == BST_CHECKED);
                     
                     GetDlgItemTextW(hwndDlg, IDC_EDIT_EXTRA_ARGS, buffer, _countof(buffer));
                     state->extra_args = buffer;
