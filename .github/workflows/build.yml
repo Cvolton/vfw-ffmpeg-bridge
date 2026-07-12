@@ -18,7 +18,7 @@ jobs:
           platform: x64
 
     name: Build ${{ matrix.config.name }}
-    runs-on: windows-2025
+    runs-on: windows-2022
 
     steps:
     - name: Checkout
@@ -28,7 +28,7 @@ jobs:
 
     - name: Configure & Build
       run: |
-        cmake -G "Visual Studio 18 2026" -B build -DCMAKE_BUILD_TYPE=Release -A ${{ matrix.config.platform }} -S .
+        cmake -G "Visual Studio 17 2022" -B build -DCMAKE_BUILD_TYPE=Release -A ${{ matrix.config.platform }} -S .
         cmake --build build --config Release
 
     - name: Upload release build
