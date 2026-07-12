@@ -282,7 +282,7 @@ const wchar_t* QualityUtils::GetStringFromQualityMode(QualityMode mode) {
     }
 }
 
-static constexpr const size_t SERIALIZER_VERSION = 1;
+static constexpr const uint8_t SERIALIZER_VERSION = 1;
 
 template<typename T>
 void appendPrimitiveToBuffer(std::vector<uint8_t>& buffer, const T& data) {
@@ -291,7 +291,7 @@ void appendPrimitiveToBuffer(std::vector<uint8_t>& buffer, const T& data) {
 }
 
 void appendWstringToBuffer(std::vector<uint8_t>& buffer, const std::wstring& str) {
-    size_t len = str.size();
+    uint64_t len = str.size();
     appendPrimitiveToBuffer(buffer, len);
     buffer.insert(buffer.end(), reinterpret_cast<const uint8_t*>(str.data()), reinterpret_cast<const uint8_t*>(str.data()) + len * sizeof(wchar_t));
 }
@@ -332,7 +332,7 @@ T readPrimitiveFromBuffer(const std::vector<uint8_t>& buffer, size_t& offset) {
 }
 
 std::wstring readWstringFromBuffer(const std::vector<uint8_t>& buffer, size_t& offset) {
-    size_t len = readPrimitiveFromBuffer<size_t>(buffer, offset);
+    uint64_t len = readPrimitiveFromBuffer<uint64_t>(buffer, offset);
     if (offset + len * sizeof(wchar_t) > buffer.size()) {
         MessageBoxW(nullptr, L"An error has occured while reading your settings.\n(Attempted buffer overflow in readWstringFromBuffer)", L"Error", MB_OK | MB_ICONERROR);
         return L"";
@@ -346,7 +346,7 @@ std::wstring readWstringFromBuffer(const std::vector<uint8_t>& buffer, size_t& o
 
 bool CodecState::Deserialize(const std::vector<uint8_t>& data) {
     size_t offset = 0;
-    size_t version = readPrimitiveFromBuffer<size_t>(data, offset);
+    uint8_t version = readPrimitiveFromBuffer<uint8_t>(data, offset);
     if (version != SERIALIZER_VERSION) {
         MessageBoxW(nullptr, L"Saved VfW FFmpeg Bridge settings are incompatible with your current version, they will be reset.", L"Error", MB_OK | MB_ICONERROR);
         return false;
