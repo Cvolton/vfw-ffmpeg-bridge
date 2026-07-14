@@ -5,11 +5,11 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_subdirectory(lib/minhook)
-add_library(tmaudio SHARED 
+add_library(vfwbrdg-tmaudio SHARED 
     src/tmaudio.cpp
 )
-target_include_directories(tmaudio PRIVATE lib/minhook/include)
-target_link_libraries(tmaudio PRIVATE 
+target_include_directories(vfwbrdg-tmaudio PRIVATE lib/minhook/include)
+target_link_libraries(vfwbrdg-tmaudio PRIVATE 
     minhook 
     dsound.lib 
     user32.lib

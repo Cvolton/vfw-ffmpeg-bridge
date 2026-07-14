@@ -36,7 +36,7 @@ Section "VfW Driver (required)" SEC_VFW
     SectionIn RO
 
     SetOutPath "$SYSDIR"
-    File "files\x86\tmaudio.dll"
+    File "files\x86\vfwbrdg-tmaudio.dll"
     File "files\x86\vfwbrdg.dll"
 
     SetRegView 32
@@ -45,7 +45,7 @@ Section "VfW Driver (required)" SEC_VFW
     ${If} ${RunningX64}
         ${DisableX64FSRedirection}
         SetOutPath "$SYSDIR"
-        File "files\x64\tmaudio.dll"
+        File "files\x64\vfwbrdg-tmaudio.dll"
         File "files\x64\vfwbrdg.dll"
         ${EnableX64FSRedirection}
 
@@ -122,7 +122,7 @@ SectionEnd
 
 ; Tooltip descriptions
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
-    !insertmacro MUI_DESCRIPTION_TEXT ${SEC_VFW} "Installs the VfW codec driver (tmaudio.dll / vfwbrdg.dll, x86 + x64) into System32/SysWOW64 and registers it as vidc.fbrg. Required."
+    !insertmacro MUI_DESCRIPTION_TEXT ${SEC_VFW} "Installs the VfW codec driver (vfwbrdg-tmaudio.dll / vfwbrdg.dll, x86 + x64) into System32/SysWOW64 and registers it as vidc.fbrg. Required."
     !insertmacro MUI_DESCRIPTION_TEXT ${SEC_FFMPEG} "Installs a bundled copy of ffmpeg.exe used by the bridge. Requires 64-bit Windows."
     !insertmacro MUI_DESCRIPTION_TEXT ${SEC_VCREDIST} "Installs the Visual C++ 2015-2022 Redistributable."
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
@@ -146,12 +146,12 @@ Section "Uninstall"
 
     DeleteRegKey HKLM "${UNINST_KEY}"
 
-    Delete "$SYSDIR\tmaudio.dll"
+    Delete "$SYSDIR\vfwbrdg-tmaudio.dll"
     Delete "$SYSDIR\vfwbrdg.dll"
 
     ${If} ${RunningX64}
         ${DisableX64FSRedirection}
-        Delete "$SYSDIR\tmaudio.dll"
+        Delete "$SYSDIR\vfwbrdg-tmaudio.dll"
         Delete "$SYSDIR\vfwbrdg.dll"
         ${EnableX64FSRedirection}
     ${EndIf}

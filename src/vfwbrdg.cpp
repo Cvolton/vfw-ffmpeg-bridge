@@ -19,7 +19,7 @@ void ffmpegBegin(CodecState& state) {
 
     state.ffmpegProcess = std::make_unique<subprocess::Popen>(state.GetFfmpegCommand(), false, true, false);
 
-    HMODULE hTMAudio = LoadLibraryW(L"tmaudio.dll");
+    HMODULE hTMAudio = LoadLibraryW(L"vfwbrdg-tmaudio.dll");
     if (hTMAudio) {
         typedef void (*SetVideoFilePathFunc)(const wchar_t*); 
         SetVideoFilePathFunc pSetVideoFilePath = (SetVideoFilePathFunc)GetProcAddress(hTMAudio, "SetVideoFilePath");
@@ -71,7 +71,7 @@ extern "C" LRESULT WINAPI DriverProc(
                 MessageBoxW(nullptr, L"Failed to find ffmpeg.exe.", L"VfW FFmpeg Bridge", MB_OK | MB_ICONERROR);
             }
 
-            HMODULE hTMAudio = LoadLibraryW(L"tmaudio.dll");
+            HMODULE hTMAudio = LoadLibraryW(L"vfwbrdg-tmaudio.dll");
             if (hTMAudio) {
                 typedef void (*SetFfmpegPathFunc)(const wchar_t*); 
                 SetFfmpegPathFunc pSetFfmpegPath = (SetFfmpegPathFunc)GetProcAddress(hTMAudio, "SetFfmpegPath");
@@ -297,7 +297,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 
         Bridge::g_hInstance = hModule;
         
-        Bridge::LoadAdjacentDLL(hModule, L"tmaudio.dll");
+        Bridge::LoadAdjacentDLL(hModule, L"vfwbrdg-tmaudio.dll");
     }
     return TRUE;
 }

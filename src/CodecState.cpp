@@ -201,7 +201,7 @@ bool CodecState::SetRenderPath() {
             return false;
         }
     } else if (this->locationSelection == LocationSelection::NextToAvi) {
-        HMODULE hTMAudio = LoadLibraryW(L"tmaudio.dll");
+        HMODULE hTMAudio = LoadLibraryW(L"vfwbrdg-tmaudio.dll");
         if (hTMAudio) {
             typedef const wchar_t* (*GetAviFilePathFunc)();
             GetAviFilePathFunc pGetAviFilePath = (GetAviFilePathFunc)GetProcAddress(hTMAudio, "GetAviFilePath");
