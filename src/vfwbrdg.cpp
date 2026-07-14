@@ -24,6 +24,9 @@ std::wstring GetFfmpegPixFmt(const BITMAPINFOHEADER* bmi) {
     } 
     else {
         switch (bmi->biCompression) {
+            // Uncompressed RGB / BGR
+            case mmioFOURCC('B', 'G', 'R', '0'): return L"bgr0";
+
             // 4:2:0 Formats (12 bpp)
             case mmioFOURCC('Y', 'V', '1', '2'): return L"yuv420p";
             case mmioFOURCC('I', '4', '2', '0'): return L"yuv420p";
@@ -34,18 +37,27 @@ std::wstring GetFfmpegPixFmt(const BITMAPINFOHEADER* bmi) {
             case mmioFOURCC('Y', 'V', '1', '6'): return L"yuv422p";
             case mmioFOURCC('Y', 'U', 'Y', '2'): return L"yuyv422";
             case mmioFOURCC('U', 'Y', 'V', 'Y'): return L"uyvy422";
+            case mmioFOURCC('H', 'D', 'Y', 'C'): return L"uyvy422";
             case mmioFOURCC('N', 'V', '1', '6'): return L"nv16";
 
             // 4:4:4 Formats (24 bpp)
             case mmioFOURCC('Y', 'V', '2', '4'): return L"yuv444p";
             case mmioFOURCC('I', '4', '4', '4'): return L"yuv444p";
 
-            // 10-bit Formats (24 bpp)
+            // 10-bit & 16-bit 4:2:0 Planar (24 bpp)
             case mmioFOURCC('P', '0', '1', '0'): return L"p010le";
+            case mmioFOURCC('P', '0', '1', '6'): return L"p016le";
+
+            // 10-bit & 16-bit 4:2:2 Planar (32 bpp)
+            case mmioFOURCC('P', '2', '1', '0'): return L"p210le";
+            case mmioFOURCC('P', '2', '1', '6'): return L"p216le";
+
+            // 10-bit 4:2:2 Packed
             case mmioFOURCC('v', '2', '1', '0'): return L"v210"; 
 
             // 16-bit RGB formats
             case mmioFOURCC('b', '4', '8', 'r'): return L"rgb48be";
+            case mmioFOURCC('B', 'R', 'A', '@'): return L"bgra64le";
         }
     }
     return L"";
@@ -231,46 +243,56 @@ extern "C" LRESULT WINAPI DriverProc(
             const BYTE* rawPixels = static_cast<const BYTE*>(icinfo->lpInput);
             BYTE* compressedBuffer = static_cast<BYTE*>(icinfo->lpOutput);
 
-            int bpp = icinfo->lpbiInput->biBitCount; // Usually 24
-            int bytesPerPixel = bpp / 8;
-            int stride = ((state->width * bytesPerPixel) + 3) & ~3;
-            
             DWORD frameSize = 0;
             DWORD fcc = icinfo->lpbiInput->biCompression;
 
-            // RGB
-            if (fcc == BI_RGB || fcc == BI_BITFIELDS) {
+            // RGB & BGR0
+            if (fcc == BI_RGB || fcc == BI_BITFIELDS || fcc == mmioFOURCC('B', 'G', 'R', '0')) {
                 int bpp = icinfo->lpbiInput->biBitCount;
+                
+                if (fcc == mmioFOURCC('B', 'G', 'R', '0') && bpp == 0) bpp = 32; 
+                
                 int bytesPerPixel = bpp / 8;
                 int stride = ((state->width * bytesPerPixel) + 3) & ~3; 
                 frameSize = stride * state->height;
             }
-            // 4:2:0
+            // 4:2:0 (12 bpp)
             else if (fcc == mmioFOURCC('Y', 'V', '1', '2') || 
-                    fcc == mmioFOURCC('I', '4', '2', '0') ||
-                    fcc == mmioFOURCC('N', 'V', '1', '2') ||
-                    fcc == mmioFOURCC('N', 'V', '2', '1')) {
+                     fcc == mmioFOURCC('I', '4', '2', '0') ||
+                     fcc == mmioFOURCC('N', 'V', '1', '2') ||
+                     fcc == mmioFOURCC('N', 'V', '2', '1')) {
                 frameSize = (state->width * state->height * 3) / 2;
             }
-            // 4:2:2
+            // 4:2:2 (16 bpp)
             else if (fcc == mmioFOURCC('Y', 'V', '1', '6') || 
-                    fcc == mmioFOURCC('Y', 'U', 'Y', '2') || 
-                    fcc == mmioFOURCC('U', 'Y', 'V', 'Y') ||
-                    fcc == mmioFOURCC('N', 'V', '1', '6')) {
+                     fcc == mmioFOURCC('Y', 'U', 'Y', '2') || 
+                     fcc == mmioFOURCC('U', 'Y', 'V', 'Y') ||
+                     fcc == mmioFOURCC('H', 'D', 'Y', 'C') ||
+                     fcc == mmioFOURCC('N', 'V', '1', '6')) {
                 frameSize = state->width * state->height * 2;
             }
-            // 4:4:4 && 4:2:0 10-bit
+            // 4:4:4 && 4:2:0 10/16-bit (24 bpp)
             else if (fcc == mmioFOURCC('Y', 'V', '2', '4') || 
-                    fcc == mmioFOURCC('I', '4', '4', '4') ||
-                    fcc == mmioFOURCC('P', '0', '1', '0')) {
+                     fcc == mmioFOURCC('I', '4', '4', '4') ||
+                     fcc == mmioFOURCC('P', '0', '1', '0') ||
+                     fcc == mmioFOURCC('P', '0', '1', '6')) {
                 frameSize = state->width * state->height * 3;
+            }
+            // 4:2:2 10/16-bit Planar (32 bpp)
+            else if (fcc == mmioFOURCC('P', '2', '1', '0') ||
+                     fcc == mmioFOURCC('P', '2', '1', '6')) {
+                frameSize = state->width * state->height * 4;
             }
             // 16-bit RGB
             else if (fcc == mmioFOURCC('b', '4', '8', 'r')) {
                 int stride = ((state->width * 6) + 3) & ~3;
                 frameSize = stride * state->height;
             }
-            // 4:2:2 10-bit
+            else if (fcc == mmioFOURCC('B', 'R', 'A', '@')) {
+                int stride = ((state->width * 8) + 3) & ~3;
+                frameSize = stride * state->height;
+            }
+            // 4:2:2 10-bit Packed
             else if (fcc == mmioFOURCC('v', '2', '1', '0')) {
                 int stride = ((state->width + 47) / 48) * 128;
                 frameSize = stride * state->height;
@@ -278,17 +300,6 @@ extern "C" LRESULT WINAPI DriverProc(
             else {
                 return ICERR_BADFORMAT;
             }
-
-            // Dumping raw pixel data to a file for debugging
-            /*std::wstring filename = L"C:\\temp\\vfw_frame_" + std::to_wstring(state->frameCount) + L".raw";
-            
-            std::ofstream outFile(filename, std::ios::binary);
-            if (outFile.is_open()) {
-                outFile.write(reinterpret_cast<const char*>(rawPixels), frameSize);
-                outFile.close();
-            }
-
-            state->frameCount++;*/
 
             // Piping to FFmpeg
             ffmpegBegin(*state);
