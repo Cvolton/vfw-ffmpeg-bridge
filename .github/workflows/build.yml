@@ -36,3 +36,35 @@ jobs:
       with:
         name: vfw-ffmpeg-bridge_${{ matrix.config.name }}
         path: ./build/Release/
+  build-installer:
+    runs-on: windows-2022
+    needs: build-msvc
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v7
+      with:
+        submodules: recursive
+
+    - uses: actions/download-artifact@v4
+      with:
+        path: "${{ github.action_path }}/artifacts"
+
+    - name: Prepare installer files
+      run: |
+        mkdir -p installer/files/x86
+        mkdir -p installer/files/x64
+        cp "${{ github.action_path }}/artifacts/vfw-ffmpeg-bridge_x86/Release/"*.dll installer/files/x86/
+        cp "${{ github.action_path }}/artifacts/vfw-ffmpeg-bridge_x64/Release/"*.dll installer/files/x64/
+
+    - name: Build installer
+      run: |
+        cd installer
+        python prepare-deps.py
+        makensis installer.nsi
+
+    - name: Upload installer
+      uses: actions/upload-artifact@v7
+      with:
+        name: vfw-ffmpeg-bridge-installer
+        path: installer/*.exe
