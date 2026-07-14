@@ -149,10 +149,11 @@ extern "C" LRESULT WINAPI DriverProc(
             info->fccHandler = mmioFOURCC('F', 'B', 'R', 'G');
             info->dwFlags = VIDCF_TEMPORAL;
             
-            wcscpy_s(info->szName, L"FFmpeg Bridge");
             #ifdef _DEBUG
+            wcscpy_s(info->szName, L"FFmpeg (Debug)");
             wcscpy_s(info->szDescription, L"VFW FFmpeg Bridge (Debug)");
             #else
+            wcscpy_s(info->szName, L"FFmpeg Bridge");
             wcscpy_s(info->szDescription, L"VFW FFmpeg Bridge");
             #endif
             return sizeof(ICINFO);
