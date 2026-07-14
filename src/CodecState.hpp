@@ -46,6 +46,8 @@ struct CodecState {
     std::wstring preset = L"";
     std::wstring tune = L"";
     std::wstring pix_fmt = L"";
+    std::wstring input_pix_fmt = L"bgr24";
+    bool shouldVFlip = true;
 
     std::wstring extra_args = L"";
 

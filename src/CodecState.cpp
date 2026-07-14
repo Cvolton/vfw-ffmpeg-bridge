@@ -94,8 +94,8 @@ std::wstring CodecState::GetQualityFlags() {
 }
 
 std::wstring CodecState::GetFfmpegCommand() {
-    std::wstring cmd = std::format(L"\"{}\" -y -f rawvideo -pix_fmt bgr24 -s {}x{} -r {}/{} -i - ", 
-                                  this->ffmpegPath, this->width, this->height, this->fpsNum, this->fpsDen);
+    std::wstring cmd = std::format(L"\"{}\" -y -f rawvideo -pix_fmt {} -s {}x{} -r {}/{} -i - ", 
+                                  this->ffmpegPath, this->input_pix_fmt, this->width, this->height, this->fpsNum, this->fpsDen);
 
     if (!this->codec.empty()) {
         cmd += std::format(L"-c:v {} ", this->codec);
@@ -113,8 +113,10 @@ std::wstring CodecState::GetFfmpegCommand() {
     if (!this->pix_fmt.empty()) {
         cmd += std::format(L"-pix_fmt {} ", this->pix_fmt);
     }
-    cmd += L"-vf \"vflip\" -an ";
-    
+    if (this->shouldVFlip) {
+        cmd += L"-vf \"vflip\" ";
+    }
+    cmd += L"-an ";
     if (!this->extra_args.empty()) {
         cmd += std::format(L"{} ", this->extra_args);
     }

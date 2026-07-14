@@ -14,6 +14,44 @@
 #include "BridgeConfig.hpp"
 #include "utils.hpp"
 
+std::wstring GetFfmpegPixFmt(const BITMAPINFOHEADER* bmi) {
+    if (!bmi) return L"";
+
+    if (bmi->biCompression == BI_RGB) {
+        if (bmi->biBitCount == 24) return L"bgr24";
+        if (bmi->biBitCount == 32) return L"bgra"; 
+        if (bmi->biBitCount == 16) return L"rgb565le";
+    } 
+    else {
+        switch (bmi->biCompression) {
+            // 4:2:0 Formats (12 bpp)
+            case mmioFOURCC('Y', 'V', '1', '2'): return L"yuv420p";
+            case mmioFOURCC('I', '4', '2', '0'): return L"yuv420p";
+            case mmioFOURCC('N', 'V', '1', '2'): return L"nv12";
+            case mmioFOURCC('N', 'V', '2', '1'): return L"nv21";
+
+            // 4:2:2 Formats (16 bpp)
+            case mmioFOURCC('Y', 'V', '1', '6'): return L"yuv422p";
+            case mmioFOURCC('Y', 'U', 'Y', '2'): return L"yuyv422";
+            case mmioFOURCC('U', 'Y', 'V', 'Y'): return L"uyvy422";
+            case mmioFOURCC('N', 'V', '1', '6'): return L"nv16";
+
+            // 4:4:4 Formats (24 bpp)
+            case mmioFOURCC('Y', 'V', '2', '4'): return L"yuv444p";
+            case mmioFOURCC('I', '4', '4', '4'): return L"yuv444p";
+
+            // 10-bit Formats (24 bpp)
+            case mmioFOURCC('P', '0', '1', '0'): return L"p010le";
+            case mmioFOURCC('v', '2', '1', '0'): return L"v210"; 
+
+            // 16-bit RGB formats
+            case mmioFOURCC('b', '6', '4', 'a'): return L"bgra64le";
+            case mmioFOURCC('b', '4', '8', 'r'): return L"bgr48le";
+        }
+    }
+    return L"";
+}
+
 void ffmpegBegin(CodecState& state) {
     if (state.ffmpegProcess) return;
 
@@ -109,9 +147,18 @@ extern "C" LRESULT WINAPI DriverProc(
             return sizeof(ICINFO);
         }
 
-        case ICM_COMPRESS_QUERY:
-            // unused by most applications???
+        case ICM_COMPRESS_QUERY: {
+            BITMAPINFOHEADER* inFormat = reinterpret_cast<BITMAPINFOHEADER*>(lParam1);
+            if (!inFormat) return ICERR_BADFORMAT;
+
+            std::wstring ffmpegFmt = GetFfmpegPixFmt(inFormat);
+            if (ffmpegFmt.empty()) {
+                return ICERR_BADFORMAT;
+            }
+
             return ICERR_OK;
+        }
+
         case ICM_COMPRESS_GET_FORMAT: {
             BITMAPINFOHEADER* inFormat = reinterpret_cast<BITMAPINFOHEADER*>(lParam1);
             BITMAPINFOHEADER* outFormat = reinterpret_cast<BITMAPINFOHEADER*>(lParam2);
@@ -153,6 +200,12 @@ extern "C" LRESULT WINAPI DriverProc(
             CodecState* state = reinterpret_cast<CodecState*>(dwDriverId);
             if (!state) return ICERR_MEMORY;
 
+            state->shouldVFlip = (inFormat->biCompression == BI_RGB || inFormat->biCompression == BI_BITFIELDS) && inFormat->biHeight > 0;
+            state->input_pix_fmt = GetFfmpegPixFmt(inFormat);
+            if (state->input_pix_fmt.empty()) {
+                return ICERR_BADFORMAT;
+            }
+
             state->width = inFormat->biWidth;
             state->height = abs(inFormat->biHeight);
             state->frameCount = 0;
@@ -182,7 +235,54 @@ extern "C" LRESULT WINAPI DriverProc(
             int bpp = icinfo->lpbiInput->biBitCount; // Usually 24
             int bytesPerPixel = bpp / 8;
             int stride = ((state->width * bytesPerPixel) + 3) & ~3;
-            DWORD frameSize = stride * state->height;
+            
+            DWORD frameSize = 0;
+            DWORD fcc = icinfo->lpbiInput->biCompression;
+
+            // RGB
+            if (fcc == BI_RGB || fcc == BI_BITFIELDS) {
+                int bpp = icinfo->lpbiInput->biBitCount;
+                int bytesPerPixel = bpp / 8;
+                int stride = ((state->width * bytesPerPixel) + 3) & ~3; 
+                frameSize = stride * state->height;
+            }
+            // 4:2:0
+            else if (fcc == mmioFOURCC('Y', 'V', '1', '2') || 
+                    fcc == mmioFOURCC('I', '4', '2', '0') ||
+                    fcc == mmioFOURCC('N', 'V', '1', '2') ||
+                    fcc == mmioFOURCC('N', 'V', '2', '1')) {
+                frameSize = (state->width * state->height * 3) / 2;
+            }
+            // 4:2:2
+            else if (fcc == mmioFOURCC('Y', 'V', '1', '6') || 
+                    fcc == mmioFOURCC('Y', 'U', 'Y', '2') || 
+                    fcc == mmioFOURCC('U', 'Y', 'V', 'Y') ||
+                    fcc == mmioFOURCC('N', 'V', '1', '6')) {
+                frameSize = state->width * state->height * 2;
+            }
+            // 4:4:4 && 4:2:0 10-bit
+            else if (fcc == mmioFOURCC('Y', 'V', '2', '4') || 
+                    fcc == mmioFOURCC('I', '4', '4', '4') ||
+                    fcc == mmioFOURCC('P', '0', '1', '0')) {
+                frameSize = state->width * state->height * 3;
+            }
+            // 16-bit RGB
+            else if (fcc == mmioFOURCC('b', '4', '8', 'r')) {
+                int stride = ((state->width * 6) + 3) & ~3;
+                frameSize = stride * state->height;
+            }
+            else if (fcc == mmioFOURCC('b', '6', '4', 'a')) {
+                int stride = ((state->width * 8) + 3) & ~3;
+                frameSize = stride * state->height;
+            }
+            // 4:2:2 10-bit
+            else if (fcc == mmioFOURCC('v', '2', '1', '0')) {
+                int stride = ((state->width + 47) / 48) * 128;
+                frameSize = stride * state->height;
+            }
+            else {
+                return ICERR_BADFORMAT;
+            }
 
             // Dumping raw pixel data to a file for debugging
             /*std::wstring filename = L"C:\\temp\\vfw_frame_" + std::to_wstring(state->frameCount) + L".raw";
