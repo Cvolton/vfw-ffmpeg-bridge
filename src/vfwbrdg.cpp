@@ -45,8 +45,7 @@ std::wstring GetFfmpegPixFmt(const BITMAPINFOHEADER* bmi) {
             case mmioFOURCC('v', '2', '1', '0'): return L"v210"; 
 
             // 16-bit RGB formats
-            case mmioFOURCC('b', '6', '4', 'a'): return L"bgra64le";
-            case mmioFOURCC('b', '4', '8', 'r'): return L"bgr48le";
+            case mmioFOURCC('b', '4', '8', 'r'): return L"rgb48be";
         }
     }
     return L"";
@@ -269,10 +268,6 @@ extern "C" LRESULT WINAPI DriverProc(
             // 16-bit RGB
             else if (fcc == mmioFOURCC('b', '4', '8', 'r')) {
                 int stride = ((state->width * 6) + 3) & ~3;
-                frameSize = stride * state->height;
-            }
-            else if (fcc == mmioFOURCC('b', '6', '4', 'a')) {
-                int stride = ((state->width * 8) + 3) & ~3;
                 frameSize = stride * state->height;
             }
             // 4:2:2 10-bit
