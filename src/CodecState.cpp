@@ -126,14 +126,14 @@ std::wstring CodecState::GetFfmpegCommand() {
     return cmd;
 }
 
-bool testCodec(std::wstring_view codec, int width, int height) {
-    auto testCmd = std::format(L"\"{}\" -hide_banner -loglevel error -f lavfi -i nullsrc=s={}x{} -vframes 1 -c:v {} -f null -", this->ffmpegPath, width, height, codec);
+bool testCodec(std::wstring_view ffmpeg, std::wstring_view codec, int width, int height) {
+    auto testCmd = std::format(L"\"{}\" -hide_banner -loglevel error -f lavfi -i nullsrc=s={}x{} -vframes 1 -c:v {} -f null -", ffmpeg, width, height, codec);
     return subprocess::Popen(testCmd).wait() == 0;
 }
 
-const wchar_t* determineBestCodec(int width, int height) {
+const wchar_t* determineBestCodec(std::wstring_view ffmpeg, int width, int height) {
     for (const auto& codec : CodecState::defaultEncoders) {
-        if (testCodec(codec, width, height)) {
+        if (testCodec(ffmpeg, codec, width, height)) {
             return codec;
         }
     }
@@ -224,7 +224,7 @@ bool CodecState::SetRenderPath() {
 }
 
 void CodecState::SetAutoDefaults() {
-    this->codec = determineBestCodec(this->width ? this->width : 1920, this->height ? this->height : 1080);
+    this->codec = determineBestCodec(this->ffmpegPath, this->width ? this->width : 1920, this->height ? this->height : 1080);
     this->qualityMode = QualityUtils::GetDefaultQualityModeForCodec(this->codec);
     std::tie(this->qualityValue1, this->qualityValue2) = QualityUtils::GetDefaultQualityForMode(this->qualityMode);
     this->preset = L"";
