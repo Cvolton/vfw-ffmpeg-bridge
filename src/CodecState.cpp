@@ -127,7 +127,7 @@ std::wstring CodecState::GetFfmpegCommand() {
 }
 
 bool testCodec(std::wstring_view codec, int width, int height) {
-    auto testCmd = std::format(L"\"ffmpeg\" -hide_banner -loglevel error -f lavfi -i nullsrc=s={}x{} -vframes 1 -c:v {} -f null -", width, height, codec);
+    auto testCmd = std::format(L"\"{}\" -hide_banner -loglevel error -f lavfi -i nullsrc=s={}x{} -vframes 1 -c:v {} -f null -", this->ffmpegPath, width, height, codec);
     return subprocess::Popen(testCmd).wait() == 0;
 }
 
