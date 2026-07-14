@@ -7,13 +7,12 @@
 ; Settings
 !define PRODUCT_NAME      "VfW FFmpeg Bridge"
 !define PRODUCT_VERSION   "1.0.0-beta"
-!define PRODUCT_PUBLISHER "M"
+!define PRODUCT_PUBLISHER "Cvolton"
 !define UNINST_KEY        "Software\Microsoft\Windows\CurrentVersion\Uninstall\vfw-ffmpeg-bridge"
 
 Name "${PRODUCT_NAME}"
 OutFile "vfw-ffmpeg-bridge-setup.exe"
 InstallDir "$PROGRAMFILES64\vfw-ffmpeg-bridge"
-InstallDirRegKey HKLM "Software\vfw-ffmpeg-bridge" "InstallDir"
 RequestExecutionLevel admin
 SetCompressor /SOLID lzma
 ShowInstDetails show
@@ -24,7 +23,6 @@ ShowUnInstDetails show
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_COMPONENTS
-!insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
 
@@ -37,26 +35,26 @@ ShowUnInstDetails show
 Section "VfW Driver (required)" SEC_VFW
     SectionIn RO
 
-    SetOutPath "$INSTDIR\x86"
+    SetOutPath "$SYSDIR"
     File "files\x86\tmaudio.dll"
     File "files\x86\vfwbrdg.dll"
 
+    SetRegView 32
+    WriteRegStr HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion\Drivers32" "vidc.fbrg" "vfwbrdg.dll"
+
     ${If} ${RunningX64}
-        SetOutPath "$INSTDIR\x64"
+        ${DisableX64FSRedirection}
+        SetOutPath "$SYSDIR"
         File "files\x64\tmaudio.dll"
         File "files\x64\vfwbrdg.dll"
+        ${EnableX64FSRedirection}
 
         SetRegView 64
-        WriteRegStr HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion\Drivers32" "vidc.fbrg" "$INSTDIR\x64\vfwbrdg.dll"
-
+        WriteRegStr HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion\Drivers32" "vidc.fbrg" "vfwbrdg.dll"
         SetRegView 32
-        WriteRegStr HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion\Drivers32" "vidc.fbrg" "$INSTDIR\x86\vfwbrdg.dll"
-
-        SetRegView 64
-    ${Else}
-        ; The SetRegView omission is technically not needed but we can save the time anyway
-        WriteRegStr HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion\Drivers32" "vidc.fbrg" "$INSTDIR\x86\vfwbrdg.dll"
     ${EndIf}
+
+    SetRegView 64
 SectionEnd
 
 ; FFmpeg
@@ -100,8 +98,12 @@ FunctionEnd
 ; Final touches
 Section "-Finish"
     SetRegView 64
-
     WriteRegStr HKLM "Software\vfw-ffmpeg-bridge" "InstallDir" "$INSTDIR"
+
+    SetRegView 32
+    WriteRegStr HKLM "Software\vfw-ffmpeg-bridge" "InstallDir" "$INSTDIR"
+
+    SetRegView 64
 
     WriteUninstaller "$INSTDIR\Uninstall.exe"
 
@@ -120,7 +122,7 @@ SectionEnd
 
 ; Tooltip descriptions
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
-    !insertmacro MUI_DESCRIPTION_TEXT ${SEC_VFW} "Installs the VfW codec driver (tmaudio.dll / vfwbrdg.dll, x86 + x64) and registers it as vidc.fbrg. Required."
+    !insertmacro MUI_DESCRIPTION_TEXT ${SEC_VFW} "Installs the VfW codec driver (tmaudio.dll / vfwbrdg.dll, x86 + x64) into System32/SysWOW64 and registers it as vidc.fbrg. Required."
     !insertmacro MUI_DESCRIPTION_TEXT ${SEC_FFMPEG} "Installs a bundled copy of ffmpeg.exe used by the bridge. Requires 64-bit Windows."
     !insertmacro MUI_DESCRIPTION_TEXT ${SEC_VCREDIST} "Installs the Visual C++ 2015-2022 Redistributable."
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
@@ -130,26 +132,32 @@ Section "Uninstall"
     ${If} ${RunningX64}
         SetRegView 64
         DeleteRegValue HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion\Drivers32" "vidc.fbrg"
+        DeleteRegKey HKLM "Software\vfw-ffmpeg-bridge"
 
         SetRegView 32
         DeleteRegValue HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion\Drivers32" "vidc.fbrg"
+        DeleteRegKey HKLM "Software\vfw-ffmpeg-bridge"
 
         SetRegView 64
     ${Else}
         DeleteRegValue HKLM "SOFTWARE\Microsoft\Windows NT\CurrentVersion\Drivers32" "vidc.fbrg"
+        DeleteRegKey HKLM "Software\vfw-ffmpeg-bridge"
     ${EndIf}
 
     DeleteRegKey HKLM "${UNINST_KEY}"
-    DeleteRegKey HKLM "Software\vfw-ffmpeg-bridge"
 
-    Delete "$INSTDIR\x86\tmaudio.dll"
-    Delete "$INSTDIR\x86\vfwbrdg.dll"
-    Delete "$INSTDIR\x64\tmaudio.dll"
-    Delete "$INSTDIR\x64\vfwbrdg.dll"
+    Delete "$SYSDIR\tmaudio.dll"
+    Delete "$SYSDIR\vfwbrdg.dll"
+
+    ${If} ${RunningX64}
+        ${DisableX64FSRedirection}
+        Delete "$SYSDIR\tmaudio.dll"
+        Delete "$SYSDIR\vfwbrdg.dll"
+        ${EnableX64FSRedirection}
+    ${EndIf}
+
     Delete "$INSTDIR\ffmpeg.exe"
     Delete "$INSTDIR\Uninstall.exe"
 
-    RMDir "$INSTDIR\x86"
-    RMDir "$INSTDIR\x64"
     RMDir "$INSTDIR"
 SectionEnd
