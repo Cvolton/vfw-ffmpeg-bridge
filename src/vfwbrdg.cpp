@@ -217,7 +217,7 @@ extern "C" LRESULT WINAPI DriverProc(
             return ICERR_OK;
         }
         case ICM_COMPRESS_END:
-            if (state->ffmpegProcess->close()) {
+            if (!state->ffmpegProcess || state->ffmpegProcess->close()) {
                 return ICERR_ERROR;
             }
             state->ffmpegProcess.reset();
