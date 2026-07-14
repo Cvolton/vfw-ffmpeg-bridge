@@ -143,7 +143,7 @@ extern "C" LRESULT WINAPI DriverProc(
             outFormat->biClrUsed = 0;
             outFormat->biClrImportant = 0;
 
-            return sizeof(BITMAPINFOHEADER);
+            return ICERR_OK;
         }
         case ICM_COMPRESS_BEGIN: {
             BITMAPINFOHEADER* inFormat = reinterpret_cast<BITMAPINFOHEADER*>(lParam1);
