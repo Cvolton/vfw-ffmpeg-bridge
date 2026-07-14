@@ -404,6 +404,28 @@ void CodecState::Load() {
     }
 }
 
+std::wstring getBundledFfmpegPath() {
+    WCHAR installDir[MAX_PATH];
+    DWORD size = sizeof(installDir);
+
+    LONG result = RegGetValueW(
+        HKEY_LOCAL_MACHINE,
+        L"Software\\vfw-ffmpeg-bridge",
+        L"InstallDir",
+        RRF_RT_REG_SZ,
+        nullptr,
+        installDir,
+        &size
+    );
+
+    if (result != ERROR_SUCCESS) {
+        return L"";
+    }
+
+    return std::wstring(installDir) + L"\\ffmpeg.exe";
+}
+
+
 bool CodecState::FindBestFfmpeg() {
     auto ffmpegProcess = std::make_unique<subprocess::Popen>(L"ffmpeg -version");
     if (ffmpegProcess->wait() == 0) {
@@ -414,6 +436,12 @@ bool CodecState::FindBestFfmpeg() {
     auto adjacentPath = Bridge::GetAdjacentPath(Bridge::g_hInstance, L"ffmpeg.exe");
     if(!adjacentPath.empty() && std::filesystem::exists(adjacentPath)) {
         this->ffmpegPath = adjacentPath;
+        return true;
+    }
+
+    auto bundledPath = getBundledFfmpegPath();
+    if(!bundledPath.empty() && std::filesystem::exists(bundledPath)) {
+        this->ffmpegPath = bundledPath;
         return true;
     }
 
