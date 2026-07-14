@@ -101,12 +101,16 @@ extern "C" LRESULT WINAPI DriverProc(
             info->dwFlags = VIDCF_TEMPORAL;
             
             wcscpy_s(info->szName, L"FFmpeg Bridge");
-            wcscpy_s(info->szDescription, L"VFW FFmpeg Bridge test");
+            #ifdef _DEBUG
+            wcscpy_s(info->szDescription, L"VFW FFmpeg Bridge (Debug)");
+            #else
+            wcscpy_s(info->szDescription, L"VFW FFmpeg Bridge");
+            #endif
             return sizeof(ICINFO);
         }
 
         case ICM_COMPRESS_QUERY:
-            MessageBoxW(NULL, L"ICM_COMPRESS_QUERY", L"VFW FFmpeg Bridge test", MB_OK);
+            // unused by most applications???
             return ICERR_OK;
         case ICM_COMPRESS_GET_FORMAT: {
             BITMAPINFOHEADER* inFormat = reinterpret_cast<BITMAPINFOHEADER*>(lParam1);
@@ -124,7 +128,11 @@ extern "C" LRESULT WINAPI DriverProc(
             outFormat->biPlanes = 1;
             
             outFormat->biBitCount = 24; 
+            #ifdef _DEBUG
+            outFormat->biCompression = mmioFOURCC('F', 'D', 'B', 'G');
+            #else
             outFormat->biCompression = mmioFOURCC('F', 'B', 'R', 'G');
+            #endif
             
             //DWORD rawSize = inFormat->biWidth * abs(inFormat->biHeight) * 3;
             //outFormat->biSizeImage = rawSize + 1024;
