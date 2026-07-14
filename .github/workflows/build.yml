@@ -61,6 +61,7 @@ jobs:
     - name: Build installer
       run: |
         cd installer
+        pip install requests
         python prepare-deps.py
         makensis installer.nsi
 
