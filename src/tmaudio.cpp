@@ -50,7 +50,8 @@ std::wstring utf8ToWide(std::string_view str) {
 
 extern "C" __declspec(dllexport) void EnableTMAudioHooks() {
     g_tmHooksEnabled = true;
-    CreateThread(nullptr, 0, InitHooksThread, nullptr, 0, nullptr);
+    auto thread = CreateThread(nullptr, 0, InitHooksThread, nullptr, 0, nullptr);
+    CloseHandle(thread);
 }
 
 extern "C" __declspec(dllexport) void DisableTMAudioHooks() {
@@ -82,7 +83,8 @@ extern "C" __declspec(dllexport) void SetVideoFilePath(const wchar_t* path) {
     }
 
     if (!g_aviPath.empty()) {
-        CreateThread(nullptr, 0, TM2_WaitAndMuxThread, nullptr, 0, nullptr);
+        auto thread = CreateThread(nullptr, 0, TM2_WaitAndMuxThread, nullptr, 0, nullptr);
+        CloseHandle(thread);
     }
 }
 
@@ -193,7 +195,7 @@ double getMediaDuration(const std::wstring& path) {
 }
 
 void muxAudio() {
-    static bool isMuxing = false;
+    static std::atomic_bool isMuxing = false;
     if (isMuxing) {
         return;
     }
