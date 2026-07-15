@@ -152,7 +152,7 @@ bool CodecState::SetRenderPath() {
 }
 
 void CodecState::SetAutoDefaults() {
-    if(!this->lastBestCodec.empty() && testCodec(this->ffmpegPath, this->lastBestCodec, this->width ? this->width : 1920, this->height ? this->height : 1080)) {
+    if(!this->lastBestCodec.empty() && !this->lastBestCodec.starts_with(L"hevc") && testCodec(this->ffmpegPath, this->lastBestCodec, this->width ? this->width : 1920, this->height ? this->height : 1080)) {
         this->codec = this->lastBestCodec;
     } else {
         this->codec = determineBestCodec(this->ffmpegPath, this->width ? this->width : 1920, this->height ? this->height : 1080);
@@ -241,6 +241,7 @@ std::vector<uint8_t> CodecState::Serialize() {
     appendWstringToBuffer(buffer, this->extra_args);
     appendWstringToBuffer(buffer, this->path);
     appendWstringToBuffer(buffer, this->otherLocation);
+    appendWstringToBuffer(buffer, this->lastBestCodec);
 
     appendPrimitiveToBuffer(buffer, this->qualityMode);
     appendPrimitiveToBuffer(buffer, this->qualityValue1);
@@ -292,6 +293,7 @@ bool CodecState::Deserialize(const std::vector<uint8_t>& data) {
     this->extra_args = std::move(readWstringFromBuffer(data, offset));
     this->path = std::move(readWstringFromBuffer(data, offset));
     this->otherLocation = std::move(readWstringFromBuffer(data, offset));
+    this->lastBestCodec = std::move(readWstringFromBuffer(data, offset));
 
     this->qualityMode = readPrimitiveFromBuffer<QualityMode>(data, offset);
     this->qualityValue1 = readPrimitiveFromBuffer<int>(data, offset);
