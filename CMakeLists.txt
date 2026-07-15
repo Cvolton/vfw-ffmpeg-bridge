@@ -21,6 +21,7 @@ add_library(vfwbrdg SHARED
     src/dialog.rc
     src/BridgeConfig.cpp
     src/CodecState.cpp
+    src/CodecSets.cpp
     src/utils.cpp
 )
 target_link_libraries(vfwbrdg PRIVATE 
