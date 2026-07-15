@@ -3,6 +3,7 @@
 #include <string_view>
 #include <vector>
 #include <utility>
+#include <functional>
 
 enum class QualityMode {
     None = -1,
@@ -31,6 +32,8 @@ namespace CodecSets {
 
         std::vector<QualityMode> qualityModes;
         QualityMode defaultQualityMode = QualityMode::None;
+
+        std::function<std::wstring(QualityMode mode, int value1, int value2)> formatQualityFlags;
     };
 
     const std::vector<std::pair<std::wstring, CodecInfo>>& GetEncoders();

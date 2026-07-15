@@ -1,5 +1,11 @@
 #include "CodecSets.hpp"
 #include <cassert>
+#include <format>
+
+std::wstring formatBitrate(int target, int max) {
+    if (max > 0) return std::format(L"-b:v {}k -maxrate:v {}k", target, max);
+    return std::format(L"-b:v {}k", target);
+}
 
 const std::vector<std::pair<std::wstring, CodecSets::CodecInfo>>& CodecSets::GetEncoders() {
     static const auto encoders = [] {
@@ -11,6 +17,15 @@ const std::vector<std::pair<std::wstring, CodecSets::CodecInfo>>& CodecSets::Get
                 .defaultTune = L"(none)",
                 .qualityModes = { QualityMode::CQP, QualityMode::VBR, QualityMode::CBR, QualityMode::Lossless },
                 .defaultQualityMode = QualityMode::CQP,
+                .formatQualityFlags = [](QualityMode mode, int v1, int v2) -> std::wstring {
+                    switch (mode) {
+                        case QualityMode::CQP:      return std::format(L"-rc vbr -cq {}", v1);
+                        case QualityMode::VBR:      return std::format(L"-rc vbr -b:v {}k -maxrate:v {}k", v1, v2);
+                        case QualityMode::CBR:      return std::format(L"-rc cbr -b:v {}k", v1);
+                        case QualityMode::Lossless: return L"-rc constqp -qp 0";
+                        default: return L"";
+                    }
+                },
             } },
             { L"h264_amf", {
                 .presets = { L"quality", L"balanced", L"speed" },
@@ -18,6 +33,18 @@ const std::vector<std::pair<std::wstring, CodecSets::CodecInfo>>& CodecSets::Get
                 .tunes = {},
                 .qualityModes = { QualityMode::CBR, QualityMode::CQP, QualityMode::VBR, QualityMode::VBR_LAT, QualityMode::QVBR, QualityMode::HQVBR, QualityMode::HQCBR },
                 .defaultQualityMode = QualityMode::CQP,
+                .formatQualityFlags = [](QualityMode mode, int v1, int v2) -> std::wstring {
+                    switch (mode) {
+                        case QualityMode::CBR:     return std::format(L"-rc cbr -b:v {}k", v1);
+                        case QualityMode::CQP:     return std::format(L"-rc cqp -qp_i {} -qp_p {} -qp_b {}", v1, v1, v1);
+                        case QualityMode::VBR:     return std::format(L"-rc vbr_peak -b:v {}k -maxrate:v {}k", v1, v2);
+                        case QualityMode::VBR_LAT: return std::format(L"-rc vbr_lat -b:v {}k -maxrate:v {}k", v1, v2);
+                        case QualityMode::QVBR:    return std::format(L"-rc qvbr -qvbr_quality {}", v1);
+                        case QualityMode::HQVBR:   return std::format(L"-rc hqvbr -qvbr_quality {}", v1);
+                        case QualityMode::HQCBR:   return std::format(L"-rc hqcbr -b:v {}k", v1);
+                        default: return L"";
+                    }
+                },
             } },
             { L"h264_qsv", {
                 .presets = { L"veryfast", L"faster", L"fast", L"medium", L"slow", L"slower", L"veryslow" },
@@ -25,12 +52,29 @@ const std::vector<std::pair<std::wstring, CodecSets::CodecInfo>>& CodecSets::Get
                 .tunes = {},
                 .qualityModes = { QualityMode::ICQ, QualityMode::CQP, QualityMode::VBR, QualityMode::CBR },
                 .defaultQualityMode = QualityMode::ICQ,
+                .formatQualityFlags = [](QualityMode mode, int v1, int v2) -> std::wstring {
+                    switch (mode) {
+                        case QualityMode::ICQ: return std::format(L"-rc icq -global_quality {}", v1);
+                        case QualityMode::CQP: return std::format(L"-rc cqp -qp {}", v1);
+                        case QualityMode::VBR: return std::format(L"-rc vbr -b:v {}k -maxrate:v {}k", v1, v2);
+                        case QualityMode::CBR: return std::format(L"-rc cbr -b:v {}k", v1);
+                        default: return L"";
+                    }
+                },
             } },
             { L"h264_vaapi", {
                 .presets = {},
                 .tunes = {},
                 .qualityModes = { QualityMode::CQP, QualityMode::VBR, QualityMode::CBR },
                 .defaultQualityMode = QualityMode::CQP,
+                .formatQualityFlags = [](QualityMode mode, int v1, int v2) -> std::wstring {
+                    switch (mode) {
+                        case QualityMode::CQP: return std::format(L"-qp {}", v1);
+                        case QualityMode::VBR: return std::format(L"-b:v {}k -maxrate:v {}k", v1, v2);
+                        case QualityMode::CBR: return std::format(L"-b:v {}k", v1);
+                        default: return L"";
+                    }
+                },
             } },
         };
 
@@ -52,6 +96,15 @@ const std::vector<std::pair<std::wstring, CodecSets::CodecInfo>>& CodecSets::Get
             .defaultTune = L"(none)",
             .qualityModes = { QualityMode::CRF, QualityMode::VBR, QualityMode::CBR, QualityMode::ABR },
             .defaultQualityMode = QualityMode::CRF,
+            .formatQualityFlags = [](QualityMode mode, int v1, int v2) -> std::wstring {
+                switch (mode) {
+                    case QualityMode::CRF: return std::format(L"-crf {}", v1);
+                    case QualityMode::CBR: return std::format(L"-b:v {}k -maxrate:v {}k -bufsize:v {}k", v1, v1, (int)(v1 * 1.5));
+                    case QualityMode::VBR: return formatBitrate(v1, v2);
+                    case QualityMode::ABR: return std::format(L"-b:v {}k", v1);
+                    default: return L"";
+                }
+            },
         };
 
         vec.push_back({ L"libx264", x264Info });
