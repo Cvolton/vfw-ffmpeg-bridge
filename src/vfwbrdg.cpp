@@ -218,6 +218,8 @@ extern "C" LRESULT WINAPI DriverProc(
 
             if(state->selectAuto) {
                 state->SetAutoDefaults();
+            } else {
+                state->lastBestCodec = L"";
             }
 
             if(!state->SetRenderPath()) {
@@ -352,6 +354,10 @@ extern "C" LRESULT WINAPI DriverProc(
             CodecState* state = reinterpret_cast<CodecState*>(dwDriverId);
 
             if (!state) return ICERR_MEMORY;
+            
+            if(state->selectAuto) {
+                state->SetAutoDefaults();
+            }
 
             DialogBoxParamW(
                 Bridge::g_hInstance,

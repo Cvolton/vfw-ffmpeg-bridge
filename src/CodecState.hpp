@@ -47,6 +47,8 @@ struct CodecState {
     std::wstring ffmpegPath = L"ffmpeg";
     std::unique_ptr<subprocess::Popen> ffmpegProcess = nullptr;
 
+    std::wstring lastBestCodec = L"";
+
     std::wstring GetQualityFlags();
     std::wstring GetFfmpegCommand();
     void SetAutoDefaults();

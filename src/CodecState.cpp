@@ -152,7 +152,11 @@ bool CodecState::SetRenderPath() {
 }
 
 void CodecState::SetAutoDefaults() {
-    this->codec = determineBestCodec(this->ffmpegPath, this->width ? this->width : 1920, this->height ? this->height : 1080);
+    if(!this->lastBestCodec.empty() && testCodec(this->ffmpegPath, this->lastBestCodec, this->width ? this->width : 1920, this->height ? this->height : 1080)) {
+        this->codec = this->lastBestCodec;
+    } else {
+        this->codec = determineBestCodec(this->ffmpegPath, this->width ? this->width : 1920, this->height ? this->height : 1080);
+    }
     this->qualityMode = QualityUtils::GetDefaultQualityModeForCodec(this->codec);
     std::tie(this->qualityValue1, this->qualityValue2) = QualityUtils::GetDefaultQualityForMode(this->qualityMode);
     this->preset = L"";
@@ -311,7 +315,6 @@ void CodecState::Save() {
 }
 
 void CodecState::Load() {
-    std::filesystem::path settingsFile = appdataPath / "settings.bin";
     std::error_code ec;
     if (!std::filesystem::exists(settingsFile, ec) || ec) {
         return;
