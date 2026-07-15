@@ -21,6 +21,8 @@ struct CodecState {
     DWORD fpsNum = 24;
     DWORD fpsDen = 1;
 
+    bool ffmpegCrashed = false;
+
     bool selectAuto = true;
     bool tmAudioHooks = true;
 

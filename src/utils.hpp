@@ -17,4 +17,5 @@ namespace TMAudio {
     std::wstring GetAviFilePath();
     void EnableTMAudioHooks();
     void DisableTMAudioHooks();
+    void CancelRender();
 }

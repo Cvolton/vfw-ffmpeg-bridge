@@ -48,6 +48,70 @@ std::wstring utf8ToWide(std::string_view str) {
     return wstr;
 }
 
+// partially based on https://stackoverflow.com/a/6202623 (Frererich Raabe : CC BY-SA 3.0)
+struct EnumWindowsCallbackArgs {
+    const DWORD pid;
+    std::vector<HWND> handles;
+
+    EnumWindowsCallbackArgs(DWORD p) : pid(p) {}
+};
+
+static BOOL CALLBACK EnumWindowsCallback( HWND hnd, LPARAM lParam )
+{
+    EnumWindowsCallbackArgs* args = (EnumWindowsCallbackArgs*)lParam;
+
+    DWORD windowPID;
+    GetWindowThreadProcessId(hnd, &windowPID);
+    if (windowPID == args->pid) {
+        args->handles.push_back(hnd);
+    }
+
+    return TRUE;
+}
+
+std::vector<HWND> getToplevelWindows()
+{
+    EnumWindowsCallbackArgs args(GetCurrentProcessId());
+    if (!EnumWindows(&EnumWindowsCallback, (LPARAM) &args)) {
+      return std::vector<HWND>();
+    }
+    return args.handles;
+}
+
+static HWND g_mainGameWindow = []() -> HWND {
+    auto windows = getToplevelWindows();
+    for(auto window : windows) {
+        if (!IsWindowVisible(window)) continue;
+        if (GetWindow(window, GW_OWNER) != nullptr) continue;
+        if (GetWindowTextLengthW(window) == 0) continue;
+        return window;
+    }
+    return nullptr;
+}();
+
+void restoreMainGameWindow() {
+    if(!g_mainGameWindow) {
+        return;
+    }
+
+    ShowWindow(g_mainGameWindow, SW_RESTORE);
+
+    // winapi hack that allows us to steal focus
+    // needed to keep older TMs from becoming mute during the recording audio stage
+    HWND curFg = GetForegroundWindow();
+    if (curFg == g_mainGameWindow) {
+        return;
+    }
+    DWORD curFgThread = GetWindowThreadProcessId(curFg, nullptr);
+    DWORD myThread = GetCurrentThreadId();
+
+    BOOL attached = AttachThreadInput(curFgThread, myThread, TRUE);
+    SetForegroundWindow(g_mainGameWindow);
+    if (attached) {
+        AttachThreadInput(curFgThread, myThread, FALSE);
+    }
+}
+
 extern "C" __declspec(dllexport) void EnableTMAudioHooks() {
     g_tmHooksEnabled = true;
     auto thread = CreateThread(nullptr, 0, InitHooksThread, nullptr, 0, nullptr);
@@ -56,6 +120,27 @@ extern "C" __declspec(dllexport) void EnableTMAudioHooks() {
 
 extern "C" __declspec(dllexport) void DisableTMAudioHooks() {
     g_tmHooksEnabled = false;
+}
+
+extern "C" __declspec(dllexport) void CancelRender() {
+    if(!g_tmHooksEnabled) {
+        return;
+    }
+
+    restoreMainGameWindow();
+    
+    UINT scanCode = MapVirtualKeyW(VK_ESCAPE, MAPVK_VK_TO_VSC);
+    INPUT inputs[2] = {};
+
+    inputs[0].type = INPUT_KEYBOARD;
+    inputs[0].ki.wScan = scanCode;
+    inputs[0].ki.dwFlags = KEYEVENTF_SCANCODE;
+
+    inputs[1].type = INPUT_KEYBOARD;
+    inputs[1].ki.wScan = scanCode;
+    inputs[1].ki.dwFlags = KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP;
+
+    SendInput(2, inputs, sizeof(INPUT));
 }
 
 extern "C" __declspec(dllexport) void SetFfmpegPath(const wchar_t* path) {
@@ -96,71 +181,6 @@ extern "C" __declspec(dllexport) const wchar_t* GetAviFilePath() {
     wcscpy_s(ret, g_aviPath.size() + 1, g_aviPath.c_str());
     return ret;
     
-}
-
-// partially based on https://stackoverflow.com/a/6202623 (Frererich Raabe : CC BY-SA 3.0)
-struct EnumWindowsCallbackArgs {
-    const DWORD pid;
-    std::vector<HWND> handles;
-
-    EnumWindowsCallbackArgs(DWORD p) : pid(p) {}
-};
-
-static BOOL CALLBACK EnumWindowsCallback( HWND hnd, LPARAM lParam )
-{
-    EnumWindowsCallbackArgs* args = (EnumWindowsCallbackArgs*)lParam;
-
-    DWORD windowPID;
-    GetWindowThreadProcessId(hnd, &windowPID);
-    if (windowPID == args->pid) {
-        args->handles.push_back(hnd);
-    }
-
-    return TRUE;
-}
-
-std::vector<HWND> getToplevelWindows()
-{
-    EnumWindowsCallbackArgs args(GetCurrentProcessId());
-    if (!EnumWindows(&EnumWindowsCallback, (LPARAM) &args)) {
-      return std::vector<HWND>();
-    }
-    return args.handles;
-}
-
-
-static HWND g_mainGameWindow = []() -> HWND {
-    auto windows = getToplevelWindows();
-    for(auto window : windows) {
-        if (!IsWindowVisible(window)) continue;
-        if (GetWindow(window, GW_OWNER) != nullptr) continue;
-        if (GetWindowTextLengthW(window) == 0) continue;
-        return window;
-    }
-    return nullptr;
-}();
-
-void restoreMainGameWindow() {
-    if(!g_mainGameWindow) {
-        return;
-    }
-
-    ShowWindow(g_mainGameWindow, SW_RESTORE);
-
-    // winapi hack that allows us to steal focus
-    // needed to keep older TMs from becoming mute during the recording audio stage
-    HWND curFg = GetForegroundWindow();
-    if (curFg == g_mainGameWindow) {
-        return;
-    }
-    DWORD curFgThread = GetWindowThreadProcessId(curFg, nullptr);
-    DWORD myThread = GetCurrentThreadId();
-
-    BOOL attached = AttachThreadInput(curFgThread, myThread, TRUE);
-    SetForegroundWindow(g_mainGameWindow);
-    if (attached) {
-        AttachThreadInput(curFgThread, myThread, FALSE);
-    }
 }
 
 double parseFffmpegDuration(const std::string& ffmpeg_output) {

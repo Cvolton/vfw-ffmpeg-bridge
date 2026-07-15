@@ -89,3 +89,13 @@ void TMAudio::DisableTMAudioHooks() {
         pDisableTMAudioHooks();
     }
 }
+
+void TMAudio::CancelRender() {
+    if(!g_hModule) return;
+
+    typedef void (*CancelRenderFunc)(); 
+    CancelRenderFunc pCancelRender = (CancelRenderFunc)GetProcAddress(g_hModule, "CancelRender");
+    if (pCancelRender) {
+        pCancelRender();
+    }
+}

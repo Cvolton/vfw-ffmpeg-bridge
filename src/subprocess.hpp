@@ -114,5 +114,14 @@ namespace subprocess {
             CloseHandle(m_proc_info.hThread);
             return exit_code;
         }
+
+        bool is_running() const {
+            if (m_proc_info.hProcess == nullptr) {
+                return false;
+            }
+            
+            DWORD result = WaitForSingleObject(m_proc_info.hProcess, 0);
+            return (result == WAIT_TIMEOUT);
+        }
     };
 }

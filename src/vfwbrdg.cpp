@@ -7,6 +7,7 @@
 #include <format>
 #include <sstream>
 #include <string_view>
+#include <thread>
 
 #include "subprocess.hpp"
 #include "resource.h"
@@ -67,6 +68,7 @@ void ffmpegBegin(CodecState& state) {
     if (state.ffmpegProcess) return;
 
     state.ffmpegProcess = std::make_unique<subprocess::Popen>(state.GetFfmpegCommand(), false, true, false);
+    state.ffmpegCrashed = false;
 
     TMAudio::SetVideoFilePath(state.path.c_str());
     if(state.tmAudioHooks) {
@@ -296,11 +298,17 @@ extern "C" LRESULT WINAPI DriverProc(
 
             // Piping to FFmpeg
             ffmpegBegin(*state);
-            state->ffmpegProcess->m_stdin.write(rawPixels, frameSize);
-
-            if(state->ffmpegProcess->m_proc_info.hProcess == nullptr) {
+            if(!state->ffmpegProcess->is_running() && !state->ffmpegCrashed) {
+                TMAudio::CancelRender();
+                std::thread([] {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                    MessageBoxW(nullptr, L"Encoding failed. Please check your encoder settings.", L"VfW FFmpeg Bridge", MB_OK | MB_ICONERROR);
+                }).detach();
+                state->ffmpegCrashed = true;
                 return ICERR_ERROR;
             }
+
+            state->ffmpegProcess->m_stdin.write(rawPixels, frameSize);
 
             // Faking AVI compression so VFW doesn't complain
             compressedBuffer[0] = 0xFF; 
