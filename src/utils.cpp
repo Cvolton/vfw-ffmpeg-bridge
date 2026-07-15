@@ -22,12 +22,68 @@ std::wstring Bridge::GetAdjacentPath(HMODULE hModule, const wchar_t* targetDllNa
     return L"";
 }
 
-void Bridge::LoadAdjacentDLL(HMODULE hModule, const wchar_t* targetDllName)
+HMODULE Bridge::LoadAdjacentDLL(HMODULE hModule, const wchar_t* targetDllName)
 {
     auto targetDllPath = GetAdjacentPath(hModule, targetDllName);
 
     if (!targetDllPath.empty())
     {
-        LoadLibraryW(targetDllPath.c_str());
+        return LoadLibraryW(targetDllPath.c_str());
+    }
+    return nullptr;
+}
+
+HMODULE TMAudio::g_hModule = nullptr;
+
+void TMAudio::SetVideoFilePath(const wchar_t* path) {
+    if(!g_hModule) return;
+
+    typedef void (*SetVideoFilePathFunc)(const wchar_t*); 
+    SetVideoFilePathFunc pSetVideoFilePath = (SetVideoFilePathFunc)GetProcAddress(g_hModule, "SetVideoFilePath");
+    if (pSetVideoFilePath) {
+        pSetVideoFilePath(path);
+    }
+}
+
+void TMAudio::SetFfmpegPath(const wchar_t* path) {
+    if(!g_hModule) return;
+
+    typedef void (*SetFfmpegPathFunc)(const wchar_t*); 
+    SetFfmpegPathFunc pSetFfmpegPath = (SetFfmpegPathFunc)GetProcAddress(g_hModule, "SetFfmpegPath");
+    if (pSetFfmpegPath) {
+        pSetFfmpegPath(path);
+    }
+}
+
+std::wstring TMAudio::GetAviFilePath() {
+    std::wstring ret = L"";
+    typedef const wchar_t* (*GetAviFilePathFunc)();
+    GetAviFilePathFunc pGetAviFilePath = (GetAviFilePathFunc)GetProcAddress(g_hModule, "GetAviFilePath");
+    if (pGetAviFilePath) {
+        const wchar_t* aviPath = pGetAviFilePath();
+        if (aviPath) {
+            ret = std::wstring(aviPath);
+        }
+        delete[] aviPath;
+    }
+    return ret;
+}
+
+void TMAudio::EnableTMAudioHooks() {
+    if(!g_hModule) return;
+
+    typedef void (*EnableTMAudioHooksFunc)(); 
+    EnableTMAudioHooksFunc pEnableTMAudioHooks = (EnableTMAudioHooksFunc)GetProcAddress(g_hModule, "EnableTMAudioHooks");
+    if (pEnableTMAudioHooks) {
+        pEnableTMAudioHooks();
+    }
+}
+void TMAudio::DisableTMAudioHooks() {
+    if(!g_hModule) return;
+
+    typedef void (*DisableTMAudioHooksFunc)(); 
+    DisableTMAudioHooksFunc pDisableTMAudioHooks = (DisableTMAudioHooksFunc)GetProcAddress(g_hModule, "DisableTMAudioHooks");
+    if (pDisableTMAudioHooks) {
+        pDisableTMAudioHooks();
     }
 }

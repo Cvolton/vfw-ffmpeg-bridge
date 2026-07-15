@@ -68,27 +68,11 @@ void ffmpegBegin(CodecState& state) {
 
     state.ffmpegProcess = std::make_unique<subprocess::Popen>(state.GetFfmpegCommand(), false, true, false);
 
-    HMODULE hTMAudio = LoadLibraryW(L"vfwbrdg-tmaudio.dll");
-    if (hTMAudio) {
-        typedef void (*SetVideoFilePathFunc)(const wchar_t*); 
-        SetVideoFilePathFunc pSetVideoFilePath = (SetVideoFilePathFunc)GetProcAddress(hTMAudio, "SetVideoFilePath");
-        if (pSetVideoFilePath) {
-            pSetVideoFilePath(state.path.c_str());
-        }
-
-        if(state.tmAudioHooks) {
-            typedef void (*EnableTMAudioHooksFunc)(); 
-            EnableTMAudioHooksFunc pEnableTMAudioHooks = (EnableTMAudioHooksFunc)GetProcAddress(hTMAudio, "EnableTMAudioHooks");
-            if (pEnableTMAudioHooks) {
-                pEnableTMAudioHooks();
-            }
-        } else {
-            typedef void (*DisableTMAudioHooksFunc)(); 
-            DisableTMAudioHooksFunc pDisableTMAudioHooks = (DisableTMAudioHooksFunc)GetProcAddress(hTMAudio, "DisableTMAudioHooks");
-            if (pDisableTMAudioHooks) {
-                pDisableTMAudioHooks();
-            }
-        }
+    TMAudio::SetVideoFilePath(state.path.c_str());
+    if(state.tmAudioHooks) {
+        TMAudio::EnableTMAudioHooks();
+    } else {
+        TMAudio::DisableTMAudioHooks();
     }
 }
 
@@ -120,14 +104,7 @@ extern "C" LRESULT WINAPI DriverProc(
                 MessageBoxW(nullptr, L"Failed to find ffmpeg.exe.", L"VfW FFmpeg Bridge", MB_OK | MB_ICONERROR);
             }
 
-            HMODULE hTMAudio = LoadLibraryW(L"vfwbrdg-tmaudio.dll");
-            if (hTMAudio) {
-                typedef void (*SetFfmpegPathFunc)(const wchar_t*); 
-                SetFfmpegPathFunc pSetFfmpegPath = (SetFfmpegPathFunc)GetProcAddress(hTMAudio, "SetFfmpegPath");
-                if (pSetFfmpegPath) {
-                    pSetFfmpegPath(state->ffmpegPath.c_str());
-                }
-            }
+            TMAudio::SetFfmpegPath(state->ffmpegPath.c_str());
 
             return reinterpret_cast<LRESULT>(state);
         }
@@ -137,6 +114,21 @@ extern "C" LRESULT WINAPI DriverProc(
                 delete state;
             }
             return 1;
+        }
+
+        case ICM_ABOUT: {
+            if (lParam1 == -1) {
+                return ICERR_OK;
+            }
+
+            MessageBoxW(
+                nullptr, 
+                L"VfW FFmpeg Bridge\n\nVersion: " PROJECT_VERSION L"-" GIT_HASH L"\nBuild Date: " __DATE__ L"\n\nCopyright (C) 2026 Cvolton\n\nCheck https://cvolton.eu/vfwbrdg for updates and more information.", 
+                L"About", 
+                MB_OK | MB_ICONINFORMATION
+            );
+
+            return ICERR_OK;
         }
 
         case ICM_GETINFO:
@@ -412,7 +404,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 
         Bridge::g_hInstance = hModule;
         
-        Bridge::LoadAdjacentDLL(hModule, L"vfwbrdg-tmaudio.dll");
+        TMAudio::g_hModule = Bridge::LoadAdjacentDLL(hModule, L"vfwbrdg-tmaudio.dll");
     }
     return TRUE;
 }
