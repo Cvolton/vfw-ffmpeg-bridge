@@ -56,6 +56,8 @@ void TMAudio::SetFfmpegPath(const wchar_t* path) {
 }
 
 std::wstring TMAudio::GetAviFilePath() {
+    if(!g_hModule) return L"";
+
     std::wstring ret = L"";
     typedef const wchar_t* (*GetAviFilePathFunc)();
     GetAviFilePathFunc pGetAviFilePath = (GetAviFilePathFunc)GetProcAddress(g_hModule, "GetAviFilePath");
