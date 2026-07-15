@@ -249,10 +249,12 @@ void muxAudio() {
         }
 
         subprocess::Popen muxProcess(cmd, false, false, false);
-        muxProcess.wait(); 
+        auto exitCode = muxProcess.wait();
 
-        DeleteFileW(tmpVideoPath.c_str());
-        DeleteFileW(wAudioPath.c_str());
+        if(exitCode == 0) {
+            DeleteFileW(tmpVideoPath.c_str());
+            DeleteFileW(wAudioPath.c_str());
+        }
 
         g_outputPath.clear();
         g_aviPath.clear();
