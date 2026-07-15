@@ -61,6 +61,7 @@ SectionEnd
 Section "FFmpeg" SEC_FFMPEG
     SetOutPath "$INSTDIR"
     File "files\ffmpeg\ffmpeg.exe"
+    File "readme-ffmpeg.txt"
 SectionEnd
 
 ; VCRedist
@@ -157,6 +158,7 @@ Section "Uninstall"
     ${EndIf}
 
     Delete "$INSTDIR\ffmpeg.exe"
+    Delete "$INSTDIR\readme-ffmpeg.txt"
     Delete "$INSTDIR\Uninstall.exe"
 
     RMDir "$INSTDIR"
