@@ -125,7 +125,16 @@ extern "C" LRESULT WINAPI DriverProc(
 
             MessageBoxW(
                 nullptr, 
-                L"VfW FFmpeg Bridge\n\nVersion: " PROJECT_VERSION L"-" GIT_HASH L"\nBuild Date: " __DATE__ L"\n\nCopyright (C) 2026 Cvolton\n\nCheck https://cvolton.eu/vfwbrdg for updates and more information.", 
+
+                L"VfW FFmpeg Bridge\n\nVersion: " PROJECT_VERSION L"-" GIT_HASH 
+                L"\nBuild Date: " __DATE__ 
+                L"\n\nCopyright (C) 2026 Cvolton\nCheck https://cvolton.eu/vfwbrdg for updates."
+                L"\n\n"
+                L"The installer for this software optionally provides a custom build of FFmpeg. "
+                L"FFmpeg is licensed under the GNU General Public License (GPL) version 3. "
+                L"This bundled binary is compiled by the ShareX project (https://github.com/ShareX/FFmpeg). "
+                L"The official FFmpeg source code is available at https://ffmpeg.org.", 
+
                 L"About", 
                 MB_OK | MB_ICONINFORMATION
             );
@@ -354,7 +363,7 @@ extern "C" LRESULT WINAPI DriverProc(
             CodecState* state = reinterpret_cast<CodecState*>(dwDriverId);
 
             if (!state) return ICERR_MEMORY;
-            
+
             if(state->selectAuto) {
                 state->SetAutoDefaults();
             }
