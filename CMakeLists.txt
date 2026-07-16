@@ -23,6 +23,7 @@ add_library(vfwbrdg SHARED
     src/CodecState.cpp
     src/CodecSets.cpp
     src/utils.cpp
+    src/AudioSets.cpp
 )
 target_link_libraries(vfwbrdg PRIVATE 
     vfw32.lib 

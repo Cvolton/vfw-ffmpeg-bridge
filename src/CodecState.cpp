@@ -39,6 +39,21 @@ std::wstring CodecState::GetQualityFlags() {
     return info->formatQualityFlags(this->qualityMode, this->qualityValue1, this->qualityValue2);
 }
 
+std::wstring CodecState::GetAudioEncoderArgs() {
+    if (this->audioCodec.empty()) {
+        return L"";
+    }
+
+    std::wstring cmd = std::format(L"-c:a {} ", this->audioCodec);
+
+    auto info = AudioSets::GetCodecInfo(this->audioCodec);
+    if (info && info->formatQualityFlags) {
+        cmd += info->formatQualityFlags(this->audioQualityMode, this->audioQualityValue);
+    }
+
+    return cmd;
+}
+
 std::wstring CodecState::GetFfmpegCommand() {
     std::wstring cmd = std::format(L"\"{}\" -y -f rawvideo -pix_fmt {} -s {}x{} -r {}/{} -i - ", 
                                   this->ffmpegPath, this->input_pix_fmt, this->width, this->height, this->fpsNum, this->fpsDen);
@@ -242,10 +257,13 @@ std::vector<uint8_t> CodecState::Serialize() {
     appendWstringToBuffer(buffer, this->path);
     appendWstringToBuffer(buffer, this->otherLocation);
     appendWstringToBuffer(buffer, this->lastBestCodec);
+    appendWstringToBuffer(buffer, this->audioCodec);
 
     appendPrimitiveToBuffer(buffer, this->qualityMode);
     appendPrimitiveToBuffer(buffer, this->qualityValue1);
     appendPrimitiveToBuffer(buffer, this->qualityValue2);
+    appendPrimitiveToBuffer(buffer, this->audioQualityMode);
+    appendPrimitiveToBuffer(buffer, this->audioQualityValue);
     appendPrimitiveToBuffer(buffer, this->selectAuto);
     appendPrimitiveToBuffer(buffer, this->tmAudioHooks);
     appendPrimitiveToBuffer(buffer, this->locationSelection);
@@ -294,10 +312,13 @@ bool CodecState::Deserialize(const std::vector<uint8_t>& data) {
     this->path = std::move(readWstringFromBuffer(data, offset));
     this->otherLocation = std::move(readWstringFromBuffer(data, offset));
     this->lastBestCodec = std::move(readWstringFromBuffer(data, offset));
+    this->audioCodec = std::move(readWstringFromBuffer(data, offset));
 
     this->qualityMode = readPrimitiveFromBuffer<QualityMode>(data, offset);
     this->qualityValue1 = readPrimitiveFromBuffer<int>(data, offset);
     this->qualityValue2 = readPrimitiveFromBuffer<int>(data, offset);
+    this->audioQualityMode = readPrimitiveFromBuffer<AudioQualityMode>(data, offset);
+    this->audioQualityValue = readPrimitiveFromBuffer<int>(data, offset);
     this->selectAuto = readPrimitiveFromBuffer<bool>(data, offset);
     this->tmAudioHooks = readPrimitiveFromBuffer<bool>(data, offset);
     this->locationSelection = readPrimitiveFromBuffer<LocationSelection>(data, offset);

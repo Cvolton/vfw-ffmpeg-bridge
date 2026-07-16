@@ -71,6 +71,7 @@ void ffmpegBegin(CodecState& state) {
     state.ffmpegCrashed = false;
 
     TMAudio::SetVideoFilePath(state.path.c_str());
+    TMAudio::SetAudioEncoderArgs(state.GetAudioEncoderArgs().c_str());
     if(state.tmAudioHooks) {
         TMAudio::EnableTMAudioHooks();
     } else {

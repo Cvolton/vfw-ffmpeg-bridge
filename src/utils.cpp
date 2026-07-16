@@ -55,6 +55,16 @@ void TMAudio::SetFfmpegPath(const wchar_t* path) {
     }
 }
 
+void TMAudio::SetAudioEncoderArgs(const wchar_t* args) {
+    if(!g_hModule) return;
+
+    typedef void (*SetAudioEncoderArgsFunc)(const wchar_t*);
+    SetAudioEncoderArgsFunc pSetAudioEncoderArgs = (SetAudioEncoderArgsFunc)GetProcAddress(g_hModule, "SetAudioEncoderArgs");
+    if (pSetAudioEncoderArgs) {
+        pSetAudioEncoderArgs(args);
+    }
+}
+
 std::wstring TMAudio::GetAviFilePath() {
     if(!g_hModule) return L"";
 

@@ -6,6 +6,7 @@
 #include <memory>
 #include "subprocess.hpp"
 #include "CodecSets.hpp"
+#include "AudioSets.hpp"
 
 enum class LocationSelection {
     Ask,
@@ -49,7 +50,12 @@ struct CodecState {
 
     std::wstring lastBestCodec = L"";
 
+    std::wstring audioCodec = L"aac";
+    AudioQualityMode audioQualityMode = AudioQualityMode::Bitrate;
+    int audioQualityValue = 256;
+
     std::wstring GetQualityFlags();
+    std::wstring GetAudioEncoderArgs();
     std::wstring GetFfmpegCommand();
     void SetAutoDefaults();
     bool SetRenderPath();

@@ -1,8 +1,10 @@
 #include "BridgeConfig.hpp"
 #include "CodecState.hpp"
 #include "CodecSets.hpp"
+#include "AudioSets.hpp"
 
 #include <ShObjIdl_core.h>
+#include <commctrl.h>
 #include <string_view>
 #include <string>
 #include <vector>
@@ -112,6 +114,83 @@ void UpdatePresetTuneUI(HWND hwndDlg, std::wstring_view encoder, const std::wstr
     } else {
         EnableWindow(hTune, TRUE);
         PopulateCombo(hTune, info->tunes.data(), info->tunes.size(), savedTune, info->defaultTune);
+    }
+}
+
+const AudioSets::AudioQualityModeInfo* FindAudioQualityModeInfoByLabel(const AudioSets::AudioCodecInfo& info, std::wstring_view label) {
+    for (const auto& [mode, modeInfo] : info.qualityModes) {
+        if (std::wstring_view(modeInfo.label) == label) {
+            return &modeInfo;
+        }
+    }
+    return nullptr;
+}
+
+void ApplyDefaultAudioQualityValue(HWND hwndDlg) {
+    HWND hEncoderCombo = GetDlgItem(hwndDlg, IDC_COMBO_AUDIO_ENCODER);
+    HWND hQualCombo = GetDlgItem(hwndDlg, IDC_COMBO_AUDIO_QUAL_MODE);
+
+    wchar_t encoderBuf[64] = {};
+    int encIdx = SendMessageW(hEncoderCombo, CB_GETCURSEL, 0, 0);
+    if (encIdx == CB_ERR) return;
+    SendMessageW(hEncoderCombo, CB_GETLBTEXT, encIdx, reinterpret_cast<LPARAM>(encoderBuf));
+
+    const AudioSets::AudioCodecInfo* info = AudioSets::GetCodecInfo(encoderBuf);
+    if (!info) return;
+
+    wchar_t labelBuf[64] = {};
+    int selIdx = SendMessageW(hQualCombo, CB_GETCURSEL, 0, 0);
+    if (selIdx == CB_ERR) return;
+    SendMessageW(hQualCombo, CB_GETLBTEXT, selIdx, reinterpret_cast<LPARAM>(labelBuf));
+
+    const AudioSets::AudioQualityModeInfo* modeInfo = FindAudioQualityModeInfoByLabel(*info, labelBuf);
+    if (!modeInfo) return;
+
+    SendMessageW(GetDlgItem(hwndDlg, IDC_SPIN_AUDIO_QUAL_VAL), UDM_SETRANGE32, modeInfo->minValue, modeInfo->maxValue);
+    SetDlgItemInt(hwndDlg, IDC_EDIT_AUDIO_QUAL_VAL, modeInfo->defaultValue, FALSE);
+}
+
+void UpdateAudioQualityUI(HWND hwndDlg, std::wstring_view codec, const std::wstring& savedLabel, bool resetValues) {
+    HWND hQualCombo = GetDlgItem(hwndDlg, IDC_COMBO_AUDIO_QUAL_MODE);
+    HWND hVal = GetDlgItem(hwndDlg, IDC_EDIT_AUDIO_QUAL_VAL);
+    HWND hSpin = GetDlgItem(hwndDlg, IDC_SPIN_AUDIO_QUAL_VAL);
+    SendMessageW(hQualCombo, CB_RESETCONTENT, 0, 0);
+
+    const AudioSets::AudioCodecInfo* info = AudioSets::GetCodecInfo(codec);
+
+    if (!info || info->qualityModes.empty()) {
+        EnableWindow(hQualCombo, FALSE);
+        EnableWindow(hVal, FALSE);
+        EnableWindow(hSpin, FALSE);
+        return;
+    }
+
+    EnableWindow(hQualCombo, TRUE);
+    EnableWindow(hVal, TRUE);
+    EnableWindow(hSpin, TRUE);
+
+    std::vector<const wchar_t*> labels;
+    labels.reserve(info->qualityModes.size());
+    for (const auto& [mode, modeInfo] : info->qualityModes) {
+        labels.push_back(modeInfo.label);
+    }
+
+    const AudioSets::AudioQualityModeInfo* defaultModeInfo = AudioSets::GetQualityModeInfo(*info, info->defaultQualityMode);
+    const wchar_t* fallback = defaultModeInfo ? defaultModeInfo->label : labels[0];
+
+    PopulateCombo(hQualCombo, labels.data(), labels.size(), savedLabel, fallback);
+
+    wchar_t selectedLabelBuf[64] = {};
+    int selIdx = SendMessageW(hQualCombo, CB_GETCURSEL, 0, 0);
+    if (selIdx != CB_ERR) {
+        SendMessageW(hQualCombo, CB_GETLBTEXT, selIdx, reinterpret_cast<LPARAM>(selectedLabelBuf));
+        if (const AudioSets::AudioQualityModeInfo* selectedModeInfo = FindAudioQualityModeInfoByLabel(*info, selectedLabelBuf)) {
+            SendMessageW(hSpin, UDM_SETRANGE32, selectedModeInfo->minValue, selectedModeInfo->maxValue);
+        }
+    }
+
+    if (resetValues) {
+        ApplyDefaultAudioQualityValue(hwndDlg);
     }
 }
 
@@ -248,7 +327,41 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
             
             SetDlgItemInt(hwndDlg, IDC_EDIT_QUAL_VAL1, state->qualityValue1, FALSE);
             SetDlgItemInt(hwndDlg, IDC_EDIT_QUAL_VAL2, state->qualityValue2, FALSE);
-            
+
+            HWND hAudioEncoderCombo = GetDlgItem(hwndDlg, IDC_COMBO_AUDIO_ENCODER);
+            HWND hAudioEncoderCustom = GetDlgItem(hwndDlg, IDC_EDIT_AUDIO_ENC_CUSTOM);
+
+            const auto& audioEncoders = AudioSets::GetEncoders();
+
+            int audioMatchIndex = -1;
+            for (size_t i = 0; i < audioEncoders.size(); ++i) {
+                SendMessageW(hAudioEncoderCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(audioEncoders[i].first.c_str()));
+                if (state->audioCodec == audioEncoders[i].first) {
+                    audioMatchIndex = static_cast<int>(i);
+                }
+            }
+            int audioOtherIndex = static_cast<int>(audioEncoders.size());
+            SendMessageW(hAudioEncoderCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(AudioSets::CustomEncoderLabel));
+
+            std::wstring_view activeAudioEncoderUI;
+            if (audioMatchIndex != -1) {
+                SendMessageW(hAudioEncoderCombo, CB_SETCURSEL, audioMatchIndex, 0);
+                activeAudioEncoderUI = audioEncoders[audioMatchIndex].first;
+                EnableWindow(hAudioEncoderCustom, FALSE);
+            } else {
+                SendMessageW(hAudioEncoderCombo, CB_SETCURSEL, audioOtherIndex, 0);
+                EnableWindow(hAudioEncoderCustom, TRUE);
+                SetWindowTextW(hAudioEncoderCustom, state->audioCodec.c_str());
+                activeAudioEncoderUI = AudioSets::CustomEncoderLabel;
+            }
+
+            const AudioSets::AudioCodecInfo* activeAudioInfo = AudioSets::GetCodecInfo(activeAudioEncoderUI);
+            const AudioSets::AudioQualityModeInfo* activeAudioModeInfo =
+                activeAudioInfo ? AudioSets::GetQualityModeInfo(*activeAudioInfo, state->audioQualityMode) : nullptr;
+
+            UpdateAudioQualityUI(hwndDlg, activeAudioEncoderUI, activeAudioModeInfo ? activeAudioModeInfo->label : L"", false);
+            SetDlgItemInt(hwndDlg, IDC_EDIT_AUDIO_QUAL_VAL, state->audioQualityValue, FALSE);
+
             UpdateModeUI(hwndDlg, state->selectAuto);
             
             return (INT_PTR)TRUE;
@@ -302,6 +415,31 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
             if (wmId == IDC_COMBO_QUAL_MODE && wmEvent == CBN_SELCHANGE) {
                 UpdateQualityInputs(hwndDlg);
                 ApplyDefaultQualityValues(hwndDlg);
+                return (INT_PTR)TRUE;
+            }
+
+            if (wmId == IDC_COMBO_AUDIO_ENCODER && wmEvent == CBN_SELCHANGE) {
+                HWND hAudioEncoderCombo = GetDlgItem(hwndDlg, IDC_COMBO_AUDIO_ENCODER);
+                HWND hAudioEncoderCustom = GetDlgItem(hwndDlg, IDC_EDIT_AUDIO_ENC_CUSTOM);
+
+                int selIndex = SendMessageW(hAudioEncoderCombo, CB_GETCURSEL, 0, 0);
+                wchar_t buffer[64];
+                SendMessageW(hAudioEncoderCombo, CB_GETLBTEXT, selIndex, reinterpret_cast<LPARAM>(buffer));
+                std::wstring_view bufferView(buffer);
+
+                if (bufferView == AudioSets::CustomEncoderLabel) {
+                    EnableWindow(hAudioEncoderCustom, TRUE);
+                    SetFocus(hAudioEncoderCustom);
+                } else {
+                    EnableWindow(hAudioEncoderCustom, FALSE);
+                }
+
+                UpdateAudioQualityUI(hwndDlg, bufferView, L"", true);
+                return (INT_PTR)TRUE;
+            }
+
+            if (wmId == IDC_COMBO_AUDIO_QUAL_MODE && wmEvent == CBN_SELCHANGE) {
+                ApplyDefaultAudioQualityValue(hwndDlg);
                 return (INT_PTR)TRUE;
             }
 
@@ -368,6 +506,37 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
                     BOOL success = FALSE;
                     state->qualityValue1 = GetDlgItemInt(hwndDlg, IDC_EDIT_QUAL_VAL1, &success, FALSE);
                     state->qualityValue2 = GetDlgItemInt(hwndDlg, IDC_EDIT_QUAL_VAL2, &success, FALSE);
+
+                    HWND hAudioEncoderCombo = GetDlgItem(hwndDlg, IDC_COMBO_AUDIO_ENCODER);
+                    selIndex = SendMessageW(hAudioEncoderCombo, CB_GETCURSEL, 0, 0);
+                    if (selIndex != CB_ERR) {
+                        SendMessageW(hAudioEncoderCombo, CB_GETLBTEXT, selIndex, reinterpret_cast<LPARAM>(buffer));
+                        if (std::wstring_view(buffer) == AudioSets::CustomEncoderLabel) {
+                            GetDlgItemTextW(hwndDlg, IDC_EDIT_AUDIO_ENC_CUSTOM, buffer, _countof(buffer));
+                            state->audioCodec = buffer;
+                        } else {
+                            state->audioCodec = buffer;
+                        }
+                    }
+
+                    const AudioSets::AudioCodecInfo* savedAudioInfo = AudioSets::GetCodecInfo(state->audioCodec);
+                    HWND hAudioQualCombo = GetDlgItem(hwndDlg, IDC_COMBO_AUDIO_QUAL_MODE);
+                    if (savedAudioInfo && IsWindowEnabled(hAudioQualCombo)) {
+                        selIndex = SendMessageW(hAudioQualCombo, CB_GETCURSEL, 0, 0);
+                        if (selIndex != CB_ERR) {
+                            SendMessageW(hAudioQualCombo, CB_GETLBTEXT, selIndex, reinterpret_cast<LPARAM>(buffer));
+                            for (const auto& [mode, modeInfo] : savedAudioInfo->qualityModes) {
+                                if (std::wstring_view(modeInfo.label) == buffer) {
+                                    state->audioQualityMode = mode;
+                                    break;
+                                }
+                            }
+                        }
+                    } else {
+                        state->audioQualityMode = AudioQualityMode::None;
+                    }
+
+                    state->audioQualityValue = GetDlgItemInt(hwndDlg, IDC_EDIT_AUDIO_QUAL_VAL, &success, FALSE);
                     
                     EndDialog(hwndDlg, IDOK);
                     return (INT_PTR)TRUE;

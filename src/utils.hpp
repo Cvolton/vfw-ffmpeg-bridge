@@ -14,6 +14,7 @@ namespace TMAudio {
 
     void SetVideoFilePath(const wchar_t* path);
     void SetFfmpegPath(const wchar_t* path);
+    void SetAudioEncoderArgs(const wchar_t* args);
     std::wstring GetAviFilePath();
     void EnableTMAudioHooks();
     void DisableTMAudioHooks();

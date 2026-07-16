@@ -23,6 +23,7 @@ static std::string g_outputPath = "c:\\temp\\output.wav";
 static std::string g_videoPath = "";
 static std::wstring g_aviPath = L"";
 static std::wstring g_ffmpeg = L"ffmpeg";
+static std::wstring g_audioEncoderArgs = L"-c:a aac -b:a 320k";
 static HANDLE g_aviHandle = INVALID_HANDLE_VALUE;
 
 std::wstring FindActivePathForExtension(std::wstring_view extension);
@@ -147,6 +148,14 @@ extern "C" __declspec(dllexport) void SetFfmpegPath(const wchar_t* path) {
     g_ffmpeg = path;
 }
 
+extern "C" __declspec(dllexport) void SetAudioEncoderArgs(const wchar_t* args) {
+    if (g_isRecording) {
+        return;
+    }
+
+    g_audioEncoderArgs = args ? args : L"";
+}
+
 extern "C" __declspec(dllexport) void SetOutputFilePath(const wchar_t* path) {
     if (g_isRecording) {
         return;
@@ -237,14 +246,14 @@ void muxAudio() {
         if (diff > 0.0) {
             int delay_ms = static_cast<int>(diff * 1000.0);
             cmd = std::format(
-                L"\"{}\" -y -i \"{}\" -i \"{}\" -c:v copy -c:a aac -b:a 320k -af \"adelay={}|{},apad\" -shortest \"{}\"", 
-                g_ffmpeg, tmpVideoPath, wAudioPath, delay_ms, delay_ms, wVideoPath
+                L"\"{}\" -y -i \"{}\" -i \"{}\" -c:v copy {} -af \"adelay={}|{},apad\" -shortest \"{}\"", 
+                g_ffmpeg, tmpVideoPath, wAudioPath, g_audioEncoderArgs, delay_ms, delay_ms, wVideoPath
             );
         } else {
             double skip_seconds = std::abs(diff);
             cmd = std::format(
-                L"\"{}\" -y -i \"{}\" -ss {:.3f} -i \"{}\" -c:v copy -c:a aac -b:a 320k -shortest \"{}\"", 
-                g_ffmpeg, tmpVideoPath, skip_seconds, wAudioPath, wVideoPath
+                L"\"{}\" -y -i \"{}\" -ss {:.3f} -i \"{}\" -c:v copy {} -shortest \"{}\"", 
+                g_ffmpeg, tmpVideoPath, skip_seconds, wAudioPath, g_audioEncoderArgs, wVideoPath
             );
         }
 
