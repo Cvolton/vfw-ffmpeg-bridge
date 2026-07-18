@@ -356,7 +356,7 @@ void CodecState::Load() {
     }
 }
 
-std::wstring getBundledFfmpegPath() {
+std::wstring getInstallDir() {
     WCHAR installDir[MAX_PATH];
     DWORD size = sizeof(installDir);
 
@@ -374,17 +374,58 @@ std::wstring getBundledFfmpegPath() {
         return L"";
     }
 
-    return std::wstring(installDir) + L"\\ffmpeg.exe";
+    return std::wstring(installDir);
 }
 
+std::wstring getBundledFfmpegPath() {
+    auto installDir = getInstallDir();
+    if (installDir.empty()) {
+        return L"";
+    }
+    return installDir + L"\\ffmpeg.exe";
+}
+
+std::pair<std::wstring, std::wstring> getWineFfmpegPaths() {
+    auto installDir = getInstallDir();
+    if (installDir.empty()) {
+        return {L"", L""};
+    }
+
+    std::wstring dir = installDir + L"\\wine";
+    return {dir + L"\\ffmpeg-x64.exe", dir + L"\\ffmpeg-x86.exe"};
+}
+
+bool testCommand(std::wstring_view command) {
+    DWORD oldMode;
+    SetThreadErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX, &oldMode);
+
+    auto process = std::make_unique<subprocess::Popen>(std::wstring(command));
+    auto ret = process->wait() == 0;
+
+    SetThreadErrorMode(oldMode, nullptr);
+    return ret;
+}
 
 bool CodecState::FindBestFfmpeg() {
-    auto ffmpegProcess = std::make_unique<subprocess::Popen>(L"ffmpeg -version");
-    if (ffmpegProcess->wait() == 0) {
+    // Linux
+    auto [wine64Path, wine32Path] = getWineFfmpegPaths();
+    if (!wine64Path.empty() && testCommand(std::format(L"\"{}\" -version", wine64Path))) {
+        this->ffmpegPath = wine64Path;
+        return true;
+    }
+
+    if (!wine32Path.empty() && testCommand(std::format(L"\"{}\" -version", wine32Path))) {
+        this->ffmpegPath = wine32Path;
+        return true;
+    }
+
+    // System
+    if (testCommand(L"ffmpeg -version")) {
         this->ffmpegPath = L"ffmpeg";
         return true;
     }
 
+    // Bundled
     auto adjacentPath = Bridge::GetAdjacentPath(Bridge::g_hInstance, L"ffmpeg.exe");
     if(!adjacentPath.empty() && std::filesystem::exists(adjacentPath)) {
         this->ffmpegPath = adjacentPath;
