@@ -258,6 +258,7 @@ std::vector<uint8_t> CodecState::Serialize() {
     appendWstringToBuffer(buffer, this->otherLocation);
     appendWstringToBuffer(buffer, this->lastBestCodec);
     appendWstringToBuffer(buffer, this->audioCodec);
+    appendWstringToBuffer(buffer, this->otherFfmpegPath);
 
     appendPrimitiveToBuffer(buffer, this->qualityMode);
     appendPrimitiveToBuffer(buffer, this->qualityValue1);
@@ -267,6 +268,7 @@ std::vector<uint8_t> CodecState::Serialize() {
     appendPrimitiveToBuffer(buffer, this->selectAuto);
     appendPrimitiveToBuffer(buffer, this->tmAudioHooks);
     appendPrimitiveToBuffer(buffer, this->locationSelection);
+    appendPrimitiveToBuffer(buffer, this->ffmpegLocationMode);
 
     return buffer;
 }
@@ -313,6 +315,7 @@ bool CodecState::Deserialize(const std::vector<uint8_t>& data) {
     this->otherLocation = std::move(readWstringFromBuffer(data, offset));
     this->lastBestCodec = std::move(readWstringFromBuffer(data, offset));
     this->audioCodec = std::move(readWstringFromBuffer(data, offset));
+    this->otherFfmpegPath = std::move(readWstringFromBuffer(data, offset));
 
     this->qualityMode = readPrimitiveFromBuffer<QualityMode>(data, offset);
     this->qualityValue1 = readPrimitiveFromBuffer<int>(data, offset);
@@ -322,6 +325,7 @@ bool CodecState::Deserialize(const std::vector<uint8_t>& data) {
     this->selectAuto = readPrimitiveFromBuffer<bool>(data, offset);
     this->tmAudioHooks = readPrimitiveFromBuffer<bool>(data, offset);
     this->locationSelection = readPrimitiveFromBuffer<LocationSelection>(data, offset);
+    this->ffmpegLocationMode = readPrimitiveFromBuffer<FfmpegLocationMode>(data, offset);
     return true;
 }
 
@@ -406,37 +410,87 @@ bool testCommand(std::wstring_view command) {
     return ret;
 }
 
-bool CodecState::FindBestFfmpeg() {
-    // Linux
+std::wstring FfmpegLocationUtils::GetLinuxPath() {
     auto [wine64Path, wine32Path] = getWineFfmpegPaths();
     if (!wine64Path.empty() && testCommand(std::format(L"\"{}\" -version", wine64Path))) {
-        this->ffmpegPath = wine64Path;
-        return true;
+        return wine64Path;
     }
-
     if (!wine32Path.empty() && testCommand(std::format(L"\"{}\" -version", wine32Path))) {
-        this->ffmpegPath = wine32Path;
-        return true;
+        return wine32Path;
     }
+    return L"";
+}
 
-    // System
-    if (testCommand(L"ffmpeg -version")) {
-        this->ffmpegPath = L"ffmpeg";
-        return true;
-    }
+bool FfmpegLocationUtils::IsLinuxAvailable() {
+    return !GetLinuxPath().empty();
+}
 
-    // Bundled
+bool FfmpegLocationUtils::IsSystemAvailable() {
+    return testCommand(L"ffmpeg -version");
+}
+
+std::wstring FfmpegLocationUtils::GetBundledPath() {
     auto adjacentPath = Bridge::GetAdjacentPath(Bridge::g_hInstance, L"ffmpeg.exe");
-    if(!adjacentPath.empty() && std::filesystem::exists(adjacentPath)) {
-        this->ffmpegPath = adjacentPath;
-        return true;
+    if (!adjacentPath.empty() && std::filesystem::exists(adjacentPath)) {
+        return adjacentPath;
     }
 
     auto bundledPath = getBundledFfmpegPath();
-    if(!bundledPath.empty() && std::filesystem::exists(bundledPath)) {
-        this->ffmpegPath = bundledPath;
-        return true;
+    if (!bundledPath.empty() && std::filesystem::exists(bundledPath)) {
+        return bundledPath;
+    }
+
+    return L"";
+}
+
+bool FfmpegLocationUtils::IsBundledAvailable() {
+    return !GetBundledPath().empty();
+}
+
+bool CodecState::FindBestFfmpeg() {
+    for(auto& mode : {FfmpegLocationMode::Linux, FfmpegLocationMode::System, FfmpegLocationMode::Bundled}) {
+        if(this->ApplyFfmpegLocation(mode)) {
+            return true;
+        }
     }
 
     return false;
+}
+
+bool CodecState::ApplyFfmpegLocation(FfmpegLocationMode mode) {
+    switch (mode) {
+        case FfmpegLocationMode::Linux: {
+            auto path = FfmpegLocationUtils::GetLinuxPath();
+            if (path.empty()) return false;
+            this->ffmpegPath = path;
+            this->ffmpegLocationMode = mode;
+            return true;
+        }
+        case FfmpegLocationMode::System: {
+            if (!FfmpegLocationUtils::IsSystemAvailable()) return false;
+            this->ffmpegPath = L"ffmpeg";
+            this->ffmpegLocationMode = mode;
+            return true;
+        }
+        case FfmpegLocationMode::Bundled: {
+            auto path = FfmpegLocationUtils::GetBundledPath();
+            if (path.empty()) return false;
+            this->ffmpegPath = path;
+            this->ffmpegLocationMode = mode;
+            return true;
+        }
+        case FfmpegLocationMode::Other: {
+            if (this->otherFfmpegPath.empty() || !std::filesystem::exists(this->otherFfmpegPath)) return false;
+            this->ffmpegPath = this->otherFfmpegPath;
+            this->ffmpegLocationMode = mode;
+            return true;
+        }
+    }
+    return false;
+}
+
+void CodecState::ApplyFfmpeg() {
+    if(this->ffmpegLocationMode == FfmpegLocationMode::Unknown) {
+        FindBestFfmpeg();
+    }
 }

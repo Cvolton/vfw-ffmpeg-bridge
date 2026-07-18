@@ -14,6 +14,14 @@ enum class LocationSelection {
     Folder,
 };
 
+enum class FfmpegLocationMode {
+    Unknown,
+    Linux,
+    System,
+    Bundled,
+    Other,
+};
+
 struct CodecState {
     int width = 0;
     int height = 0;
@@ -46,6 +54,8 @@ struct CodecState {
     std::wstring path = L"c:\\temp\\output.mp4";
 
     std::wstring ffmpegPath = L"ffmpeg";
+    FfmpegLocationMode ffmpegLocationMode = FfmpegLocationMode::Unknown;
+    std::wstring otherFfmpegPath = L"";
     std::unique_ptr<subprocess::Popen> ffmpegProcess = nullptr;
 
     std::wstring lastBestCodec = L"";
@@ -67,6 +77,9 @@ struct CodecState {
     void Load();
 
     bool FindBestFfmpeg();
+    bool ApplyFfmpegLocation(FfmpegLocationMode mode);
+
+    void ApplyFfmpeg();
 };
 
 using QualityDefaults = std::pair<int, int>;
@@ -75,4 +88,13 @@ namespace QualityUtils {
     QualityMode GetQualityModeFromString(const std::wstring& modeStr);
     const wchar_t* GetStringFromQualityMode(QualityMode mode);
     QualityMode GetDefaultQualityModeForCodec(std::wstring_view codec);
+}
+
+namespace FfmpegLocationUtils {
+    bool IsLinuxAvailable();
+    bool IsSystemAvailable();
+    bool IsBundledAvailable();
+
+    std::wstring GetLinuxPath();
+    std::wstring GetBundledPath();
 }

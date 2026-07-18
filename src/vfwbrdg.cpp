@@ -103,7 +103,9 @@ extern "C" LRESULT WINAPI DriverProc(
 
             auto state = new CodecState();
             state->Load();
-            if(!state->FindBestFfmpeg()) {
+            state->ApplyFfmpeg();
+
+            if (state->ffmpegLocationMode == FfmpegLocationMode::Unknown) {
                 MessageBoxW(nullptr, L"Failed to find ffmpeg.exe.", L"VfW FFmpeg Bridge", MB_OK | MB_ICONERROR);
             }
 

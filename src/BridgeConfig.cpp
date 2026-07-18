@@ -264,6 +264,30 @@ void UpdateLocationUI(HWND hwndDlg, LocationSelection selection) {
     }
 }
 
+int FfmpegLocationRadioId(FfmpegLocationMode mode) {
+    switch (mode) {
+        case FfmpegLocationMode::Linux:   return IDC_RADIO_FFMPEG_LINUX;
+        case FfmpegLocationMode::System:  return IDC_RADIO_FFMPEG_SYSTEM;
+        case FfmpegLocationMode::Bundled: return IDC_RADIO_FFMPEG_BUNDLED;
+        case FfmpegLocationMode::Other:   return IDC_RADIO_FFMPEG_OTHER;
+        default:                          return IDC_RADIO_FFMPEG_SYSTEM;
+    }
+}
+
+void UpdateFfmpegLocationUI(HWND hwndDlg, FfmpegLocationMode mode) {
+    CheckRadioButton(hwndDlg, IDC_RADIO_FFMPEG_LINUX, IDC_RADIO_FFMPEG_OTHER, FfmpegLocationRadioId(mode));
+
+    bool isOther = (mode == FfmpegLocationMode::Other);
+    EnableWindow(GetDlgItem(hwndDlg, IDC_EDIT_FFMPEG_OTHER_PATH), isOther);
+    EnableWindow(GetDlgItem(hwndDlg, IDC_BTN_FFMPEG_OTHER_BROWSE), isOther);
+}
+
+void RefreshFfmpegLocationAvailability(HWND hwndDlg) {
+    EnableWindow(GetDlgItem(hwndDlg, IDC_RADIO_FFMPEG_LINUX), FfmpegLocationUtils::IsLinuxAvailable());
+    EnableWindow(GetDlgItem(hwndDlg, IDC_RADIO_FFMPEG_SYSTEM), FfmpegLocationUtils::IsSystemAvailable());
+    EnableWindow(GetDlgItem(hwndDlg, IDC_RADIO_FFMPEG_BUNDLED), FfmpegLocationUtils::IsBundledAvailable());
+}
+
 INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
         case WM_INITDIALOG: {
@@ -276,6 +300,10 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
             CheckRadioButton(hwndDlg, IDC_RADIO_AUTO, IDC_RADIO_CUSTOM,
                 state->selectAuto ? IDC_RADIO_AUTO : IDC_RADIO_CUSTOM);
             UpdateLocationUI(hwndDlg, state->locationSelection);
+
+            SetDlgItemTextW(hwndDlg, IDC_EDIT_FFMPEG_OTHER_PATH, state->otherFfmpegPath.c_str());
+            RefreshFfmpegLocationAvailability(hwndDlg);
+            UpdateFfmpegLocationUI(hwndDlg, state->ffmpegLocationMode);
 
             CheckDlgButton(hwndDlg, IDC_CHECK_TM_AUDIO_WORKAROUNDS,
                 state->tmAudioHooks ? BST_CHECKED : BST_UNCHECKED);
@@ -386,6 +414,21 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
                     state->locationSelection = LocationSelection::Folder;
                 }
                 UpdateLocationUI(hwndDlg, state->locationSelection);
+                return (INT_PTR)TRUE;
+            }
+
+            if ((wmId == IDC_RADIO_FFMPEG_LINUX || wmId == IDC_RADIO_FFMPEG_SYSTEM ||
+                 wmId == IDC_RADIO_FFMPEG_BUNDLED || wmId == IDC_RADIO_FFMPEG_OTHER) && wmEvent == BN_CLICKED) {
+                FfmpegLocationMode mode =
+                    (wmId == IDC_RADIO_FFMPEG_LINUX) ? FfmpegLocationMode::Linux :
+                    (wmId == IDC_RADIO_FFMPEG_SYSTEM) ? FfmpegLocationMode::System :
+                    (wmId == IDC_RADIO_FFMPEG_BUNDLED) ? FfmpegLocationMode::Bundled :
+                    FfmpegLocationMode::Other;
+
+                UpdateFfmpegLocationUI(hwndDlg, mode);
+                if (mode == FfmpegLocationMode::Other) {
+                    SetFocus(GetDlgItem(hwndDlg, IDC_EDIT_FFMPEG_OTHER_PATH));
+                }
                 return (INT_PTR)TRUE;
             }
 
@@ -537,7 +580,23 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
                     }
 
                     state->audioQualityValue = GetDlgItemInt(hwndDlg, IDC_EDIT_AUDIO_QUAL_VAL, &success, FALSE);
-                    
+
+                    FfmpegLocationMode selectedFfmpegMode =
+                        (IsDlgButtonChecked(hwndDlg, IDC_RADIO_FFMPEG_LINUX) == BST_CHECKED) ? FfmpegLocationMode::Linux :
+                        (IsDlgButtonChecked(hwndDlg, IDC_RADIO_FFMPEG_BUNDLED) == BST_CHECKED) ? FfmpegLocationMode::Bundled :
+                        (IsDlgButtonChecked(hwndDlg, IDC_RADIO_FFMPEG_OTHER) == BST_CHECKED) ? FfmpegLocationMode::Other :
+                        FfmpegLocationMode::System;
+
+                    if (selectedFfmpegMode == FfmpegLocationMode::Other) {
+                        GetDlgItemTextW(hwndDlg, IDC_EDIT_FFMPEG_OTHER_PATH, buffer, _countof(buffer));
+                        state->otherFfmpegPath = buffer;
+                    }
+
+                    if (!state->ApplyFfmpegLocation(selectedFfmpegMode)) {
+                        MessageBoxW(hwndDlg, L"The selected FFmpeg location isn't available. Please choose another, or browse to a valid ffmpeg.exe.", L"VfW FFmpeg Bridge", MB_OK | MB_ICONERROR);
+                        return (INT_PTR)TRUE;
+                    }
+
                     EndDialog(hwndDlg, IDOK);
                     return (INT_PTR)TRUE;
                 }
@@ -587,6 +646,26 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
 
                     if (comInitializedHere) {
                         CoUninitialize();
+                    }
+
+                    return (INT_PTR)TRUE;
+                }
+                case IDC_BTN_FFMPEG_OTHER_BROWSE: {
+                    wchar_t fileBuffer[MAX_PATH] = {};
+                    GetDlgItemTextW(hwndDlg, IDC_EDIT_FFMPEG_OTHER_PATH, fileBuffer, _countof(fileBuffer));
+
+                    OPENFILENAMEW ofn = {};
+                    ofn.lStructSize = sizeof(ofn);
+                    ofn.hwndOwner = hwndDlg;
+                    ofn.lpstrFilter = L"Executable Files (*.exe)\0*.exe\0All Files (*.*)\0*.*\0";
+                    ofn.lpstrFile = fileBuffer;
+                    ofn.nMaxFile = MAX_PATH;
+                    ofn.lpstrDefExt = L"exe";
+                    ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+
+                    if (GetOpenFileNameW(&ofn)) {
+                        state->otherFfmpegPath = fileBuffer;
+                        SetDlgItemTextW(hwndDlg, IDC_EDIT_FFMPEG_OTHER_PATH, fileBuffer);
                     }
 
                     return (INT_PTR)TRUE;
