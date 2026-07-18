@@ -597,12 +597,20 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
                         return (INT_PTR)TRUE;
                     }
 
+                    state->Save();
+
                     EndDialog(hwndDlg, IDOK);
                     return (INT_PTR)TRUE;
                 }
                 case IDCANCEL:
                     EndDialog(hwndDlg, IDCANCEL);
                     return (INT_PTR)TRUE;
+                case IDC_BTN_RESET_DEFAULTS: {
+                    state->Reset();
+                    state->Save();
+                    EndDialog(hwndDlg, IDOK);
+                    return (INT_PTR)TRUE;
+                }
                 case IDC_BTN_LOC_BROWSE: {
                     HRESULT hrInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
                     bool comInitializedHere = SUCCEEDED(hrInit);

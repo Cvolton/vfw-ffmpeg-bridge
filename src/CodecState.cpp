@@ -494,3 +494,8 @@ void CodecState::ApplyFfmpeg() {
         FindBestFfmpeg();
     }
 }
+
+void CodecState::Reset() {
+    CodecState defaultState;
+    *this = std::move(defaultState);
+}

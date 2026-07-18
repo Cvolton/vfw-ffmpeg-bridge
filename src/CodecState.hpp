@@ -80,6 +80,8 @@ struct CodecState {
     bool ApplyFfmpegLocation(FfmpegLocationMode mode);
 
     void ApplyFfmpeg();
+
+    void Reset();
 };
 
 using QualityDefaults = std::pair<int, int>;
