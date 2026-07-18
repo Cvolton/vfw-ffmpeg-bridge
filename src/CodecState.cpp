@@ -492,6 +492,8 @@ bool CodecState::ApplyFfmpegLocation(FfmpegLocationMode mode) {
 void CodecState::ApplyFfmpeg() {
     if(this->ffmpegLocationMode == FfmpegLocationMode::Unknown) {
         FindBestFfmpeg();
+    } else {
+        ApplyFfmpegLocation(this->ffmpegLocationMode);
     }
 }
 
