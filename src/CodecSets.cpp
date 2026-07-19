@@ -26,6 +26,7 @@ const std::vector<std::pair<std::wstring, CodecSets::CodecInfo>>& CodecSets::Get
                         default: return L"";
                     }
                 },
+                .testExtraArgs = L"-preset p1 -tune ull -delay 0 -bf 0",
             } },
             { L"h264_amf", {
                 .presets = { L"quality", L"balanced", L"speed" },
@@ -45,6 +46,7 @@ const std::vector<std::pair<std::wstring, CodecSets::CodecInfo>>& CodecSets::Get
                         default: return L"";
                     }
                 },
+                .testExtraArgs = L"-quality speed -bf 0",
             } },
             { L"h264_qsv", {
                 .presets = { L"veryfast", L"faster", L"fast", L"medium", L"slow", L"slower", L"veryslow" },
@@ -61,6 +63,7 @@ const std::vector<std::pair<std::wstring, CodecSets::CodecInfo>>& CodecSets::Get
                         default: return L"";
                     }
                 },
+                .testExtraArgs = L"-preset veryfast -bf 0 -async_depth 1",
             } },
             { L"h264_vaapi", {
                 .presets = {},
@@ -75,6 +78,7 @@ const std::vector<std::pair<std::wstring, CodecSets::CodecInfo>>& CodecSets::Get
                         default: return L"";
                     }
                 },
+                .testExtraArgs = L"-bf 0",
             } },
         };
 
@@ -105,6 +109,7 @@ const std::vector<std::pair<std::wstring, CodecSets::CodecInfo>>& CodecSets::Get
                     default: return L"";
                 }
             },
+            .testExtraArgs = L"-preset ultrafast -tune zerolatency",
         };
 
         vec.push_back({ L"libx264", x264Info });

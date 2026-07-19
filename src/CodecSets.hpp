@@ -34,6 +34,8 @@ namespace CodecSets {
         QualityMode defaultQualityMode = QualityMode::None;
 
         std::function<std::wstring(QualityMode mode, int value1, int value2)> formatQualityFlags;
+
+        std::wstring testExtraArgs;
     };
 
     const std::vector<std::pair<std::wstring, CodecInfo>>& GetEncoders();

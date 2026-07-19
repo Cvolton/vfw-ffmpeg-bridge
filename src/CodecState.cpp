@@ -92,7 +92,7 @@ std::wstring CodecState::GetFfmpegCommand() {
     return cmd;
 }
 
-bool testCodec(std::wstring_view ffmpeg, std::wstring_view codec, int width, int height) {
+bool testCodec(std::wstring_view ffmpeg, std::wstring_view codec, const CodecSets::CodecInfo& info, int width, int height) {
     static std::mutex cacheMutex;
     static std::unordered_map<std::wstring, std::shared_future<bool>> cache;
 
@@ -116,7 +116,7 @@ bool testCodec(std::wstring_view ffmpeg, std::wstring_view codec, int width, int
     }
 
     if (isRunner) {
-        auto testCmd = std::format(L"\"{}\" -hide_banner -loglevel error -f lavfi -i nullsrc=s={}x{} -vframes 1 -c:v {} -f null -", ffmpeg, width, height, codec);
+        auto testCmd = std::format(L"\"{}\" -hide_banner -loglevel error -f lavfi -i nullsrc=s={}x{} -vframes 1 -c:v {} {} -f null -", ffmpeg, width, height, codec, info.testExtraArgs);
         bool result = subprocess::Popen(testCmd).wait() == 0;
         
         promise->set_value(result);
@@ -132,7 +132,7 @@ const wchar_t* determineBestCodec(std::wstring_view ffmpeg, int width, int heigh
     std::vector<std::pair<std::wstring_view, std::future<bool>>> probes;
     probes.reserve(encoders.size());
     for (const auto& [name, info] : encoders) {
-        probes.emplace_back(name, std::async(std::launch::async, testCodec, ffmpeg, name, width, height));
+        probes.emplace_back(name, std::async(std::launch::async, testCodec, ffmpeg, name, info, width, height));
     }
 
     for (auto& [name, fut] : probes) {
@@ -208,8 +208,11 @@ void CodecState::SetAutoDefaults() {
     int testWidth = this->width ? this->width : 1920;
     int testHeight = this->height ? this->height : 1080;
 
-    if(!this->lastBestCodec.empty() && this->lastBestWidth == testWidth && this->lastBestHeight == testHeight && testCodec(this->ffmpegPath, this->lastBestCodec, testWidth, testHeight)) {
-        this->codec = this->lastBestCodec;
+    const auto* codecInfo = CodecSets::GetCodecInfo(this->lastBestCodec);
+    if (!this->lastBestCodec.empty() && this->lastBestWidth == testWidth && this->lastBestHeight == testHeight && codecInfo) {
+        if (testCodec(this->ffmpegPath, this->lastBestCodec, *codecInfo, testWidth, testHeight)) {
+            this->codec = this->lastBestCodec;
+        }
     } else {
         this->codec = determineBestCodec(this->ffmpegPath, testWidth, testHeight);
         this->lastBestCodec = this->codec;
