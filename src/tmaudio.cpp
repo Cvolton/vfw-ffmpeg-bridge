@@ -188,8 +188,11 @@ extern "C" __declspec(dllexport) const wchar_t* GetAviFilePath() {
     }
     auto ret = new wchar_t[g_aviPath.size() + 1];
     wcscpy_s(ret, g_aviPath.size() + 1, g_aviPath.c_str());
-    return ret;
-    
+    return ret;    
+}
+
+extern "C" __declspec(dllexport) void DeleteAviFilePathBuffer(const wchar_t* buffer) {
+    delete[] buffer;
 }
 
 double parseFffmpegDuration(const std::string& ffmpeg_output) {

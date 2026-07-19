@@ -76,7 +76,12 @@ std::wstring TMAudio::GetAviFilePath() {
         if (aviPath) {
             ret = std::wstring(aviPath);
         }
-        delete[] aviPath;
+        
+        typedef void (*DeleteAviFilePathBufferFunc)(const wchar_t*);
+        DeleteAviFilePathBufferFunc pDeleteAviFilePathBuffer = (DeleteAviFilePathBufferFunc)GetProcAddress(g_hModule, "DeleteAviFilePathBuffer");
+        if (pDeleteAviFilePathBuffer) {
+            pDeleteAviFilePathBuffer(aviPath);
+        }
     }
     return ret;
 }
