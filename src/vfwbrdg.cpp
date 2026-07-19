@@ -223,6 +223,9 @@ extern "C" LRESULT WINAPI DriverProc(
             state->height = abs(inFormat->biHeight);
             state->frameCount = 0;
 
+            if(!state->SetRenderPath()) {
+                return ICERR_BADPARAM;
+            }
             state->EnsureFfmpegReady();
 
             if (state->ffmpegLocationMode == FfmpegLocationMode::Unknown) {
@@ -238,11 +241,7 @@ extern "C" LRESULT WINAPI DriverProc(
                 state->lastBestCodec = L"";
             }
 
-            if(!state->SetRenderPath()) {
-                return ICERR_BADPARAM;
-            } else {
-                state->Save();
-            }
+            state->Save();
 
             return ICERR_OK;
         }
