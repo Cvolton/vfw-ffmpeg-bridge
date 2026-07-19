@@ -94,35 +94,52 @@ std::wstring CodecState::GetFfmpegCommand() {
 
 bool testCodec(std::wstring_view ffmpeg, std::wstring_view codec, int width, int height) {
     static std::mutex cacheMutex;
-    static std::unordered_map<std::wstring, bool> cache;
+    static std::unordered_map<std::wstring, std::shared_future<bool>> cache;
 
     std::wstring key = std::format(L"{}|{}|{}x{}", ffmpeg, codec, width, height);
 
+    std::shared_future<bool> targetFuture;
+    bool isRunner = false;
+    std::shared_ptr<std::promise<bool>> promise;
+
     {
         std::lock_guard lock(cacheMutex);
-        if (auto it = cache.find(key); it != cache.end()) {
-            return it->second;
+        auto it = cache.find(key);
+        if (it != cache.end()) {
+            targetFuture = it->second;
+        } else {
+            promise = std::make_shared<std::promise<bool>>();
+            targetFuture = promise->get_future().share();
+            cache[key] = targetFuture;
+            isRunner = true;
         }
     }
 
-    auto testCmd = std::format(L"\"{}\" -hide_banner -loglevel error -f lavfi -i nullsrc=s={}x{} -vframes 1 -c:v {} -f null -", ffmpeg, width, height, codec);
-    bool result = subprocess::Popen(testCmd).wait() == 0;
-
-    {
-        std::lock_guard lock(cacheMutex);
-        cache[key] = result;
+    if (isRunner) {
+        auto testCmd = std::format(L"\"{}\" -hide_banner -loglevel error -f lavfi -i nullsrc=s={}x{} -vframes 1 -c:v {} -f null -", ffmpeg, width, height, codec);
+        bool result = subprocess::Popen(testCmd).wait() == 0;
+        
+        promise->set_value(result);
+        return result;
     }
-    return result;
+
+    return targetFuture.get();
 }
 
 const wchar_t* determineBestCodec(std::wstring_view ffmpeg, int width, int height) {
-    for (const auto& [name, info] : CodecSets::GetEncoders()) {
-        if (testCodec(ffmpeg, name, width, height)) {
-            return name.c_str();
+    const auto& encoders = CodecSets::GetEncoders();
+
+    std::vector<std::pair<std::wstring_view, std::future<bool>>> probes;
+    probes.reserve(encoders.size());
+    for (const auto& [name, info] : encoders) {
+        probes.emplace_back(name, std::async(std::launch::async, testCodec, ffmpeg, name, width, height));
+    }
+
+    for (auto& [name, fut] : probes) {
+        if (fut.get()) {
+            return name.data();
         }
     }
-    // libx264 takes everything, so getting to this code path implies
-    // an error with the testing methodology
     return L"libx264";
 }
 
