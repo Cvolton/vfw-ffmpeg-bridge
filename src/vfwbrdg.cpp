@@ -103,19 +103,14 @@ extern "C" LRESULT WINAPI DriverProc(
 
             auto state = new CodecState();
             state->Load();
-            state->ApplyFfmpeg();
-
-            if (state->ffmpegLocationMode == FfmpegLocationMode::Unknown) {
-                MessageBoxW(nullptr, L"Failed to find ffmpeg.exe.", L"VfW FFmpeg Bridge", MB_OK | MB_ICONERROR);
-            }
-
-            TMAudio::SetFfmpegPath(state->ffmpegPath.c_str());
+            state->BeginAsyncInit();
 
             return reinterpret_cast<LRESULT>(state);
         }
 
         case DRV_CLOSE: {
             if (state) {
+                state->EnsureFfmpegReady();
                 delete state;
             }
             return 1;
@@ -228,7 +223,16 @@ extern "C" LRESULT WINAPI DriverProc(
             state->height = abs(inFormat->biHeight);
             state->frameCount = 0;
 
-            if(state->selectAuto) {
+            state->EnsureFfmpegReady();
+
+            if (state->ffmpegLocationMode == FfmpegLocationMode::Unknown) {
+                MessageBoxW(nullptr, L"Failed to find ffmpeg.exe.", L"VfW FFmpeg Bridge", MB_OK | MB_ICONERROR);
+                return ICERR_BADFORMAT;
+            }
+
+            TMAudio::SetFfmpegPath(state->ffmpegPath.c_str());
+
+            if (state->selectAuto) {
                 state->SetAutoDefaults();
             } else {
                 state->lastBestCodec = L"";
@@ -367,6 +371,7 @@ extern "C" LRESULT WINAPI DriverProc(
 
             if (!state) return ICERR_MEMORY;
 
+            state->EnsureFfmpegReady();
             if(state->selectAuto) {
                 state->SetAutoDefaults();
             }

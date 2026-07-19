@@ -4,6 +4,7 @@
 #include <vector>
 #include <string_view>
 #include <memory>
+#include <future>
 #include "subprocess.hpp"
 #include "CodecSets.hpp"
 #include "AudioSets.hpp"
@@ -59,10 +60,14 @@ struct CodecState {
     std::unique_ptr<subprocess::Popen> ffmpegProcess = nullptr;
 
     std::wstring lastBestCodec = L"";
+    int lastBestWidth = 0;
+    int lastBestHeight = 0;
 
     std::wstring audioCodec = L"aac";
     AudioQualityMode audioQualityMode = AudioQualityMode::Bitrate;
     int audioQualityValue = 256;
+
+    std::future<void> asyncInit;
 
     std::wstring GetQualityFlags();
     std::wstring GetAudioEncoderArgs();
@@ -82,6 +87,9 @@ struct CodecState {
     void ApplyFfmpeg();
 
     void Reset();
+
+    void BeginAsyncInit();
+    void EnsureFfmpegReady();
 };
 
 using QualityDefaults = std::pair<int, int>;

@@ -109,9 +109,12 @@ namespace subprocess {
         int close(bool should_wait = true) {
             int exit_code = 0;
             m_stdin.close();
+            m_stdout.close();
             if (should_wait) exit_code = wait();
             CloseHandle(m_proc_info.hProcess);
             CloseHandle(m_proc_info.hThread);
+            m_proc_info.hProcess = nullptr;
+            m_proc_info.hThread = nullptr;
             return exit_code;
         }
 
@@ -122,6 +125,12 @@ namespace subprocess {
             
             DWORD result = WaitForSingleObject(m_proc_info.hProcess, 0);
             return (result == WAIT_TIMEOUT);
+        }
+
+        ~Popen() {
+            if (m_proc_info.hProcess && m_proc_info.hThread) {
+                close();
+            }
         }
     };
 }

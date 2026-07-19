@@ -225,10 +225,10 @@ double getMediaDuration(const std::wstring& path) {
 
 void muxAudio() {
     static std::atomic_bool isMuxing = false;
-    if (isMuxing) {
+    bool expected = false;
+    if (!isMuxing.compare_exchange_strong(expected, true)) {
         return;
     }
-    isMuxing = true;
 
     if (!g_videoPath.empty() && !g_outputPath.empty()) {
         std::wstring wVideoPath = utf8ToWide(g_videoPath);

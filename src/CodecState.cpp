@@ -10,6 +10,9 @@
 #include <iomanip>
 #include <filesystem>
 #include <fstream>
+#include <unordered_map>
+#include <mutex>
+#include <optional>
 
 static auto appdataPath = []() -> std::filesystem::path {
     wchar_t* appdata = nullptr;
@@ -90,8 +93,26 @@ std::wstring CodecState::GetFfmpegCommand() {
 }
 
 bool testCodec(std::wstring_view ffmpeg, std::wstring_view codec, int width, int height) {
+    static std::mutex cacheMutex;
+    static std::unordered_map<std::wstring, bool> cache;
+
+    std::wstring key = std::format(L"{}|{}|{}x{}", ffmpeg, codec, width, height);
+
+    {
+        std::lock_guard lock(cacheMutex);
+        if (auto it = cache.find(key); it != cache.end()) {
+            return it->second;
+        }
+    }
+
     auto testCmd = std::format(L"\"{}\" -hide_banner -loglevel error -f lavfi -i nullsrc=s={}x{} -vframes 1 -c:v {} -f null -", ffmpeg, width, height, codec);
-    return subprocess::Popen(testCmd).wait() == 0;
+    bool result = subprocess::Popen(testCmd).wait() == 0;
+
+    {
+        std::lock_guard lock(cacheMutex);
+        cache[key] = result;
+    }
+    return result;
 }
 
 const wchar_t* determineBestCodec(std::wstring_view ffmpeg, int width, int height) {
@@ -167,10 +188,16 @@ bool CodecState::SetRenderPath() {
 }
 
 void CodecState::SetAutoDefaults() {
-    if(!this->lastBestCodec.empty() && !this->lastBestCodec.starts_with(L"hevc") && testCodec(this->ffmpegPath, this->lastBestCodec, this->width ? this->width : 1920, this->height ? this->height : 1080)) {
+    int testWidth = this->width ? this->width : 1920;
+    int testHeight = this->height ? this->height : 1080;
+
+    if(!this->lastBestCodec.empty() && this->lastBestWidth == testWidth && this->lastBestHeight == testHeight && testCodec(this->ffmpegPath, this->lastBestCodec, testWidth, testHeight)) {
         this->codec = this->lastBestCodec;
     } else {
-        this->codec = determineBestCodec(this->ffmpegPath, this->width ? this->width : 1920, this->height ? this->height : 1080);
+        this->codec = determineBestCodec(this->ffmpegPath, testWidth, testHeight);
+        this->lastBestCodec = this->codec;
+        this->lastBestWidth = testWidth;
+        this->lastBestHeight = testHeight;
     }
     this->qualityMode = QualityUtils::GetDefaultQualityModeForCodec(this->codec);
     std::tie(this->qualityValue1, this->qualityValue2) = QualityUtils::GetDefaultQualityForMode(this->qualityMode);
@@ -269,6 +296,10 @@ std::vector<uint8_t> CodecState::Serialize() {
     appendPrimitiveToBuffer(buffer, this->tmAudioHooks);
     appendPrimitiveToBuffer(buffer, this->locationSelection);
     appendPrimitiveToBuffer(buffer, this->ffmpegLocationMode);
+    appendPrimitiveToBuffer(buffer, this->width);
+    appendPrimitiveToBuffer(buffer, this->height);
+    appendPrimitiveToBuffer(buffer, this->lastBestWidth);
+    appendPrimitiveToBuffer(buffer, this->lastBestHeight);
 
     return buffer;
 }
@@ -326,6 +357,13 @@ bool CodecState::Deserialize(const std::vector<uint8_t>& data) {
     this->tmAudioHooks = readPrimitiveFromBuffer<bool>(data, offset);
     this->locationSelection = readPrimitiveFromBuffer<LocationSelection>(data, offset);
     this->ffmpegLocationMode = readPrimitiveFromBuffer<FfmpegLocationMode>(data, offset);
+
+    // width and height restored for faster automatic codec selection
+    this->width = readPrimitiveFromBuffer<int>(data, offset);
+    this->height = readPrimitiveFromBuffer<int>(data, offset);
+
+    this->lastBestWidth = readPrimitiveFromBuffer<int>(data, offset);
+    this->lastBestHeight = readPrimitiveFromBuffer<int>(data, offset);
     return true;
 }
 
@@ -411,22 +449,48 @@ bool testCommand(std::wstring_view command) {
 }
 
 std::wstring FfmpegLocationUtils::GetLinuxPath() {
-    auto [wine64Path, wine32Path] = getWineFfmpegPaths();
-    if (!wine64Path.empty() && testCommand(std::format(L"\"{}\" -version", wine64Path))) {
-        return wine64Path;
+    static std::mutex cacheMutex;
+    static std::optional<std::wstring> cachedResult;
+    std::lock_guard lock(cacheMutex);
+    if (cachedResult.has_value()) {
+        return cachedResult.value();
+    } else {
+        cachedResult = [] -> std::wstring {
+            auto [wine64Path, wine32Path] = getWineFfmpegPaths();
+            if (!wine64Path.empty() && testCommand(std::format(L"\"{}\" -version", wine64Path))) {
+                return wine64Path;
+            }
+            if (!wine32Path.empty() && testCommand(std::format(L"\"{}\" -version", wine32Path))) {
+                return wine32Path;
+            }
+            return L"";
+        }();
+        return cachedResult.value();
     }
-    if (!wine32Path.empty() && testCommand(std::format(L"\"{}\" -version", wine32Path))) {
-        return wine32Path;
-    }
-    return L"";
 }
 
 bool FfmpegLocationUtils::IsLinuxAvailable() {
-    return !GetLinuxPath().empty();
+    static std::mutex cacheMutex;
+    static std::optional<bool> cachedResult;
+    std::lock_guard lock(cacheMutex);
+    if (cachedResult.has_value()) {
+        return cachedResult.value();
+    } else {
+        cachedResult = !GetLinuxPath().empty();
+        return cachedResult.value();
+    }
 }
 
 bool FfmpegLocationUtils::IsSystemAvailable() {
-    return testCommand(L"ffmpeg -version");
+    static std::mutex cacheMutex;
+    static std::optional<bool> cachedResult;
+    std::lock_guard lock(cacheMutex);
+    if (cachedResult.has_value()) {
+        return cachedResult.value();
+    } else {
+        cachedResult = testCommand(L"ffmpeg -version");
+        return cachedResult.value();
+    }
 }
 
 std::wstring FfmpegLocationUtils::GetBundledPath() {
@@ -444,7 +508,15 @@ std::wstring FfmpegLocationUtils::GetBundledPath() {
 }
 
 bool FfmpegLocationUtils::IsBundledAvailable() {
-    return !GetBundledPath().empty();
+    static std::mutex cacheMutex;
+    static std::optional<bool> cachedResult;
+    std::lock_guard lock(cacheMutex);
+    if (cachedResult.has_value()) {
+        return cachedResult.value();
+    } else {
+        cachedResult = !GetBundledPath().empty();
+        return cachedResult.value();
+    }
 }
 
 bool CodecState::FindBestFfmpeg() {
@@ -500,4 +572,19 @@ void CodecState::ApplyFfmpeg() {
 void CodecState::Reset() {
     CodecState defaultState;
     *this = std::move(defaultState);
+}
+
+void CodecState::BeginAsyncInit() {
+    this->asyncInit = std::async(std::launch::async, [this] {
+        this->ApplyFfmpeg();
+        if (this->selectAuto) {
+            determineBestCodec(this->ffmpegPath, this->width ? this->width : 1920, this->height ? this->height : 1080);
+        }
+    });
+}
+
+void CodecState::EnsureFfmpegReady() {
+    if (this->asyncInit.valid()) {
+        this->asyncInit.get();
+    }
 }
