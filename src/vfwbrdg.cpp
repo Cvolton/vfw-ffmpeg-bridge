@@ -148,7 +148,7 @@ extern "C" LRESULT WINAPI DriverProc(
             info->dwSize = sizeof(ICINFO);
             info->fccType = ICTYPE_VIDEO;
             info->fccHandler = mmioFOURCC('F', 'B', 'R', 'G');
-            info->dwFlags = VIDCF_TEMPORAL;
+            info->dwFlags = VIDCF_TEMPORAL | VIDCF_COMPRESSFRAMES | VIDCF_FASTTEMPORALC;
             
             #ifdef _DEBUG
             wcscpy_s(info->szName, L"FFmpeg (Debug)");
