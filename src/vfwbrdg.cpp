@@ -356,6 +356,8 @@ extern "C" LRESULT WINAPI DriverProc(
                 if (icf->dwScale > 0) {
                     state->fpsNum = icf->dwRate;
                     state->fpsDen = icf->dwScale;
+
+                    MessageBoxW(nullptr, std::format(L"Frame rate set to {}/{} fps.", state->fpsNum, state->fpsDen).c_str(), L"VfW FFmpeg Bridge", MB_OK | MB_ICONINFORMATION);
                 }
             }
             return ICERR_OK;

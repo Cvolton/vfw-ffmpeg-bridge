@@ -58,6 +58,8 @@ std::wstring CodecState::GetAudioEncoderArgs() {
 }
 
 std::wstring CodecState::GetFfmpegCommand() {
+    MessageBoxW(nullptr, std::format(L"Generating ffmpeg command with fps: {}/{}", this->fpsNum, this->fpsDen).c_str(), L"VfW FFmpeg Bridge", MB_OK | MB_ICONINFORMATION);
+
     std::wstring cmd = std::format(L"\"{}\" -y -f rawvideo -pix_fmt {} -s {}x{} -r {}/{} -i - ", 
                                   this->ffmpegPath, this->input_pix_fmt, this->width, this->height, this->fpsNum, this->fpsDen);
 
