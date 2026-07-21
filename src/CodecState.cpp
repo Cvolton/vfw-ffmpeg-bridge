@@ -447,16 +447,6 @@ std::wstring getBundledFfmpegPath() {
     return installDir + L"\\ffmpeg.exe";
 }
 
-std::pair<std::wstring, std::wstring> getWineFfmpegPaths() {
-    auto installDir = getInstallDir();
-    if (installDir.empty()) {
-        return {L"", L""};
-    }
-
-    std::wstring dir = installDir + L"\\wine";
-    return {dir + L"\\ffmpeg-x64.exe", dir + L"\\ffmpeg-x86.exe"};
-}
-
 bool testCommand(std::wstring_view command) {
     DWORD oldMode;
     SetThreadErrorMode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX, &oldMode);
@@ -476,14 +466,12 @@ std::wstring FfmpegLocationUtils::GetLinuxPath() {
         return cachedResult.value();
     } else {
         cachedResult = [] -> std::wstring {
-            auto [wine64Path, wine32Path] = getWineFfmpegPaths();
-            if (!wine64Path.empty() && testCommand(std::format(L"\"{}\" -version", wine64Path))) {
-                return wine64Path;
+            auto installDir = getInstallDir();
+            if (installDir.empty()) {
+                return L"";
             }
-            if (!wine32Path.empty() && testCommand(std::format(L"\"{}\" -version", wine32Path))) {
-                return wine32Path;
-            }
-            return L"";
+
+            return installDir + L"\\wine\\ffmpeg.exe";
         }();
         return cachedResult.value();
     }
@@ -496,7 +484,16 @@ bool FfmpegLocationUtils::IsLinuxAvailable() {
     if (cachedResult.has_value()) {
         return cachedResult.value();
     } else {
-        cachedResult = !GetLinuxPath().empty();
+        cachedResult = [] {
+            static const char * (CDECL *pwine_get_version)(void);
+            HMODULE hntdll = GetModuleHandle("ntdll.dll");
+            if(!hntdll) return false;
+
+            pwine_get_version = (const char *(__cdecl *)(void))GetProcAddress(hntdll, "wine_get_version");
+            if(!pwine_get_version) return false;
+
+            return testCommand(std::format(L"\"{}\" -version", FfmpegLocationUtils::GetLinuxPath()));
+        }();
         return cachedResult.value();
     }
 }
