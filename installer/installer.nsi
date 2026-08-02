@@ -55,6 +55,10 @@ Section "VfW Driver (required)" SEC_VFW
     ${EndIf}
 
     SetRegView 64
+
+    SetOutPath "$INSTDIR\wine"
+    File "files\wine\ffmpeg.exe"
+    File "files\wine\ffmpeg_linux_worker"
 SectionEnd
 
 ; FFmpeg
@@ -160,6 +164,10 @@ Section "Uninstall"
     Delete "$INSTDIR\ffmpeg.exe"
     Delete "$INSTDIR\readme-ffmpeg.txt"
     Delete "$INSTDIR\Uninstall.exe"
+
+    Delete "$INSTDIR\wine\ffmpeg.exe"
+    Delete "$INSTDIR\wine\ffmpeg_linux_worker"
+    RMDir "$INSTDIR\wine"
 
     RMDir "$INSTDIR"
 SectionEnd

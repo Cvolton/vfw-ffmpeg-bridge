@@ -40,3 +40,20 @@ with open("files/vcredist/vc_redist.x86.exe", "wb") as f:
     f.write(response.content)
 
 print("VCRedist downloaded successfully.")
+
+# Linux Bridge
+os.makedirs("files/wine", exist_ok=True)
+
+print("Downloading Linux Bridge (ffmpeg.exe)...")
+response = requests.get("https://github.com/Cvolton/ffmpeg-linux-bridge/releases/download/v1.0.0/ffmpeg.exe")
+response.raise_for_status()
+with open("files/wine/ffmpeg.exe", "wb") as f:
+    f.write(response.content)
+
+print("Downloading Linux Bridge (ffmpeg_linux_worker)...")
+response = requests.get("https://github.com/Cvolton/ffmpeg-linux-bridge/releases/download/v1.0.0/ffmpeg_linux_worker")
+response.raise_for_status()
+with open("files/wine/ffmpeg_linux_worker", "wb") as f:
+    f.write(response.content)
+
+print("Linux Bridge downloaded successfully.")
