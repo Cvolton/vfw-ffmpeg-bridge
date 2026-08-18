@@ -194,6 +194,12 @@ std::pair<Bridge::LinuxDialogResult, std::wstring> Bridge::LinuxDialog(DialogTyp
     }
     std::wstring unixPath = wine_get_unix_file_name(defaultPath.c_str());
 
+    for(auto& c : filters) {
+        if(c == L'\0') {
+            c = L'|';
+        }
+    }
+
     std::wstring cmd = std::format(L"\"{}\" {} \"{}\" \"{}\"", loc, static_cast<int>(type), unixPath, filters);
 
     subprocess::Popen proc(cmd, true);
@@ -205,7 +211,15 @@ std::pair<Bridge::LinuxDialogResult, std::wstring> Bridge::LinuxDialog(DialogTyp
     switch(code) {
         case 0: {
             std::wstring result = utf8ToWide(output);
-            return {LinuxDialogResult::Success, result};
+
+            std::wstring winPath = result;
+            typedef std::wstring (WINAPI *wine_get_dos_file_name_func)(const wchar_t*);
+            wine_get_dos_file_name_func wine_get_dos_file_name = (wine_get_dos_file_name_func)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "wine_get_dos_file_name");
+            if(wine_get_dos_file_name) {
+                winPath = wine_get_dos_file_name(result.c_str());
+            }
+
+            return {LinuxDialogResult::Success, winPath};
         }
         case 1: {
             return {LinuxDialogResult::Cancel, L""};
