@@ -383,10 +383,10 @@ HRESULT WINAPI Hooked_CreateCaptureBuffer(LPDIRECTSOUNDCAPTURE pThis, LPCDSCBUFF
         void* realStartAddr = bufferVTable[9];
         void* realStopAddr = bufferVTable[10];
 
-        if (MH_CreateHook(realStartAddr, &Hooked_Start, (LPVOID*)&Original_Start) == MH_OK) {
+        if (MH_CreateHook(realStartAddr, reinterpret_cast<LPVOID>(&Hooked_Start), (LPVOID*)&Original_Start) == MH_OK) {
             MH_EnableHook(realStartAddr);
         }
-        if (MH_CreateHook(realStopAddr, &Hooked_Stop, (LPVOID*)&Original_Stop) == MH_OK) {
+        if (MH_CreateHook(realStopAddr, reinterpret_cast<LPVOID>(&Hooked_Stop), (LPVOID*)&Original_Stop) == MH_OK) {
             MH_EnableHook(realStopAddr);
         }
         
@@ -407,7 +407,7 @@ HRESULT WINAPI Hooked_DirectSoundCaptureCreate8(LPCGUID pcGuidDevice, LPDIRECTSO
         void** captureVTable = *(void***)(*ppDSC8);
         void* realCreateBufAddr = captureVTable[3];
 
-        if (MH_CreateHook(realCreateBufAddr, &Hooked_CreateCaptureBuffer, (LPVOID*)&Original_CreateCaptureBuffer) == MH_OK) {
+        if (MH_CreateHook(realCreateBufAddr, reinterpret_cast<LPVOID>(&Hooked_CreateCaptureBuffer), (LPVOID*)&Original_CreateCaptureBuffer) == MH_OK) {
             MH_EnableHook(realCreateBufAddr);
         }
     }
@@ -425,7 +425,7 @@ void SetupDirectSoundHook()
 
     void* pCreateAddr = (void*)GetProcAddress(hDSound, "DirectSoundCaptureCreate8");
     if (pCreateAddr) {
-        MH_CreateHook(pCreateAddr, &Hooked_DirectSoundCaptureCreate8, (LPVOID*)&Original_DirectSoundCaptureCreate8);
+        MH_CreateHook(pCreateAddr, reinterpret_cast<LPVOID>(&Hooked_DirectSoundCaptureCreate8), (LPVOID*)&Original_DirectSoundCaptureCreate8);
         MH_EnableHook(pCreateAddr);
     }
 }
@@ -469,8 +469,8 @@ void SetupOpenALHook()
     void* pStopAddr = (void*)GetProcAddress(hOpenAL, "alcCaptureStop");
 
     if (pStartAddr && pStopAddr) {
-        MH_CreateHook(pStartAddr, &Hooked_alcCaptureStart, (LPVOID*)&Original_alcCaptureStart);
-        MH_CreateHook(pStopAddr, &Hooked_alcCaptureStop, (LPVOID*)&Original_alcCaptureStop);
+        MH_CreateHook(pStartAddr, reinterpret_cast<LPVOID>(&Hooked_alcCaptureStart), (LPVOID*)&Original_alcCaptureStart);
+        MH_CreateHook(pStopAddr, reinterpret_cast<LPVOID>(&Hooked_alcCaptureStop), (LPVOID*)&Original_alcCaptureStop);
         
         MH_EnableHook(pStartAddr);
         MH_EnableHook(pStopAddr);

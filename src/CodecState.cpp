@@ -605,8 +605,10 @@ bool CodecState::ApplyFfmpegLocation(FfmpegLocationMode mode) {
             this->ffmpegLocationMode = mode;
             return true;
         }
+        default: {
+            return false;
+        }
     }
-    return false;
 }
 
 void CodecState::ApplyFfmpeg() {
