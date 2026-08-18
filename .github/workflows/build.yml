@@ -60,9 +60,7 @@ jobs:
 
   build-installer:
     runs-on: windows-2022
-    needs: |
-      build-msvc
-      build-file-picker
+    needs: [build-msvc, build-file-picker]
 
     steps:
     - name: Checkout
