@@ -1,6 +1,25 @@
 #include "utils.hpp"
+#include "CodecState.hpp"
+#include "subprocess.hpp"
 #include <ShObjIdl_core.h>
+#include <format>
 HINSTANCE Bridge::g_hInstance = nullptr;
+
+std::string wideToUtf8(std::wstring_view path) {
+    // geode::utils::string::wideToUtf8
+    int count = WideCharToMultiByte(CP_UTF8, 0, path.data(), path.size(), NULL, 0, NULL, NULL);
+    std::string str(count, 0);
+    WideCharToMultiByte(CP_UTF8, 0, path.data(), path.size(), &str[0], count, NULL, NULL);
+    return str;
+}
+
+std::wstring utf8ToWide(std::string_view str) {
+    // geode::utils::string::utf8ToWide
+    int count = MultiByteToWideChar(CP_UTF8, 0, str.data(), str.size(), NULL, 0);
+    std::wstring wstr(count, 0);
+    MultiByteToWideChar(CP_UTF8, 0, str.data(), str.size(), &wstr[0], count);
+    return wstr;
+}
 
 std::wstring Bridge::GetAdjacentPath(HMODULE hModule, const wchar_t* targetDllName)
 {
@@ -35,6 +54,19 @@ HMODULE Bridge::LoadAdjacentDLL(HMODULE hModule, const wchar_t* targetDllName)
 }
 
 std::optional<std::wstring> Bridge::SaveDialog(std::wstring defaultPath, std::wstring filters) {
+    if(Bridge::IsWine()) {
+        auto res = LinuxDialog(DialogType::Save, defaultPath, L"");
+        if(res.first != LinuxDialogResult::Error) {
+            if(res.first == LinuxDialogResult::Success) {
+                return res.second;
+            } else {
+                return std::nullopt;
+            }
+        }
+
+        // fallback to wine built in file picker if linux dialog fails to open
+    }
+
     wchar_t fileBuffer[MAX_PATH] = {};
     wcsncpy_s(fileBuffer, defaultPath.c_str(), _TRUNCATE);
 
@@ -54,6 +86,19 @@ std::optional<std::wstring> Bridge::SaveDialog(std::wstring defaultPath, std::ws
 }
 
 std::optional<std::wstring> Bridge::OpenDialog(std::wstring defaultPath, std::wstring filters) {
+    if(Bridge::IsWine()) {
+        auto res = LinuxDialog(DialogType::Open, defaultPath, L"");
+        if(res.first != LinuxDialogResult::Error) {
+            if(res.first == LinuxDialogResult::Success) {
+                return res.second;
+            } else {
+                return std::nullopt;
+            }
+        }
+
+        // fallback to wine built in file picker if linux dialog fails to open
+    }
+
     wchar_t fileBuffer[MAX_PATH] = {};
     wcsncpy_s(fileBuffer, defaultPath.c_str(), _TRUNCATE);
 
@@ -73,6 +118,20 @@ std::optional<std::wstring> Bridge::OpenDialog(std::wstring defaultPath, std::ws
 }
 
 std::optional<std::wstring> Bridge::FolderDialog(std::wstring defaultPath, HWND hwndDlg) {
+    if(Bridge::IsWine()) {
+        auto res = LinuxDialog(DialogType::SelectFolder, defaultPath, L"");
+        if(res.first != LinuxDialogResult::Error) {
+            if(res.first == LinuxDialogResult::Success) {
+                return res.second;
+            } else {
+                return std::nullopt;
+            }
+        }
+
+        // fallback to wine built in file picker if linux dialog fails to open
+    }
+
+
     std::optional<std::wstring> ret = std::nullopt;
 
     HRESULT hrInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
@@ -119,6 +178,73 @@ std::optional<std::wstring> Bridge::FolderDialog(std::wstring defaultPath, HWND 
     }
 
     return ret;
+}
+
+std::pair<Bridge::LinuxDialogResult, std::wstring> Bridge::LinuxDialog(DialogType type, std::wstring defaultPath, std::wstring filters) {
+    if(!Bridge::IsWine()) {
+        return {LinuxDialogResult::Error, L""};
+    }
+
+    auto loc = Bridge::GetInstallDir() + L"\\wine\\linux-file-picker.exe";
+    
+    typedef std::wstring (WINAPI *wine_get_unix_file_name_func)(const wchar_t*);
+    wine_get_unix_file_name_func wine_get_unix_file_name = (wine_get_unix_file_name_func)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "wine_get_unix_file_name");
+    if(!wine_get_unix_file_name) {
+        return {LinuxDialogResult::Error, L""};
+    }
+    std::wstring unixPath = wine_get_unix_file_name(defaultPath.c_str());
+
+    std::wstring cmd = std::format(L"\"{}\" {} \"{}\" \"{}\"", loc, static_cast<int>(type), unixPath, filters);
+
+    subprocess::Popen proc(cmd, true);
+    
+    std::string output = proc.m_stdout.read();
+    auto code = proc.wait();
+    proc.m_stdout.close();
+
+    switch(code) {
+        case 0: {
+            std::wstring result = utf8ToWide(output);
+            return {LinuxDialogResult::Success, result};
+        }
+        case 1: {
+            return {LinuxDialogResult::Cancel, L""};
+        }
+        default:
+            return {LinuxDialogResult::Error, L""};
+    }
+}
+
+bool Bridge::IsWine() {
+    static const char * (CDECL *pwine_get_version)(void);
+    HMODULE hntdll = GetModuleHandle("ntdll.dll");
+    if(!hntdll) return false;
+
+    pwine_get_version = (const char *(__cdecl *)(void))GetProcAddress(hntdll, "wine_get_version");
+    if(!pwine_get_version) return false;
+
+    return true;
+}
+
+std::wstring Bridge::GetInstallDir() {
+    WCHAR installDir[MAX_PATH];
+    DWORD size = sizeof(installDir);
+
+    LONG result = RegGetValueW(
+        HKEY_LOCAL_MACHINE,
+        L"Software\\vfw-ffmpeg-bridge",
+        L"InstallDir",
+        RRF_RT_REG_SZ,
+        nullptr,
+        installDir,
+        &size
+    );
+
+    if (result != ERROR_SUCCESS) {
+        return L"";
+    }
+
+    return std::wstring(installDir);
 }
 
 HMODULE TMAudio::g_hModule = nullptr;

@@ -440,29 +440,8 @@ void CodecState::Load() {
     }
 }
 
-std::wstring getInstallDir() {
-    WCHAR installDir[MAX_PATH];
-    DWORD size = sizeof(installDir);
-
-    LONG result = RegGetValueW(
-        HKEY_LOCAL_MACHINE,
-        L"Software\\vfw-ffmpeg-bridge",
-        L"InstallDir",
-        RRF_RT_REG_SZ,
-        nullptr,
-        installDir,
-        &size
-    );
-
-    if (result != ERROR_SUCCESS) {
-        return L"";
-    }
-
-    return std::wstring(installDir);
-}
-
 std::wstring getBundledFfmpegPath() {
-    auto installDir = getInstallDir();
+    auto installDir = Bridge::GetInstallDir();
     if (installDir.empty()) {
         return L"";
     }
@@ -488,7 +467,7 @@ std::wstring FfmpegLocationUtils::GetLinuxPath() {
         return cachedResult.value();
     } else {
         cachedResult = [] -> std::wstring {
-            auto installDir = getInstallDir();
+            auto installDir = Bridge::GetInstallDir();
             if (installDir.empty()) {
                 return L"";
             }
@@ -507,12 +486,7 @@ bool FfmpegLocationUtils::IsLinuxAvailable() {
         return cachedResult.value();
     } else {
         cachedResult = [] {
-            static const char * (CDECL *pwine_get_version)(void);
-            HMODULE hntdll = GetModuleHandle("ntdll.dll");
-            if(!hntdll) return false;
-
-            pwine_get_version = (const char *(__cdecl *)(void))GetProcAddress(hntdll, "wine_get_version");
-            if(!pwine_get_version) return false;
+            if(!Bridge::IsWine()) return false;
 
             return testCommand(std::format(L"\"{}\" -version", FfmpegLocationUtils::GetLinuxPath()));
         }();
