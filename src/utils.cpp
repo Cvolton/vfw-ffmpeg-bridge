@@ -55,7 +55,7 @@ HMODULE Bridge::LoadAdjacentDLL(HMODULE hModule, const wchar_t* targetDllName)
 
 std::optional<std::wstring> Bridge::SaveDialog(std::wstring defaultPath, std::wstring filters) {
     if(Bridge::IsWine()) {
-        auto res = LinuxDialog(DialogType::Save, defaultPath, L"");
+        auto res = LinuxDialog(DialogType::Save, defaultPath, filters);
         if(res.first != LinuxDialogResult::Error) {
             if(res.first == LinuxDialogResult::Success) {
                 return res.second;
@@ -87,7 +87,7 @@ std::optional<std::wstring> Bridge::SaveDialog(std::wstring defaultPath, std::ws
 
 std::optional<std::wstring> Bridge::OpenDialog(std::wstring defaultPath, std::wstring filters) {
     if(Bridge::IsWine()) {
-        auto res = LinuxDialog(DialogType::Open, defaultPath, L"");
+        auto res = LinuxDialog(DialogType::Open, defaultPath, filters);
         if(res.first != LinuxDialogResult::Error) {
             if(res.first == LinuxDialogResult::Success) {
                 return res.second;
@@ -186,13 +186,19 @@ std::pair<Bridge::LinuxDialogResult, std::wstring> Bridge::LinuxDialog(DialogTyp
     }
 
     auto loc = Bridge::GetInstallDir() + L"\\wine\\fbrg_file_picker";
-    
-    typedef std::wstring (WINAPI *wine_get_unix_file_name_func)(const wchar_t*);
+
+    typedef char* (CDECL *wine_get_unix_file_name_func)(const wchar_t*);
     wine_get_unix_file_name_func wine_get_unix_file_name = (wine_get_unix_file_name_func)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "wine_get_unix_file_name");
     if(!wine_get_unix_file_name) {
         return {LinuxDialogResult::Error, L""};
     }
-    std::wstring unixPath = wine_get_unix_file_name(defaultPath.c_str());
+
+    char* unixPathRaw = wine_get_unix_file_name(defaultPath.c_str());
+    if(!unixPathRaw) {
+        return {LinuxDialogResult::Error, L""};
+    }
+    std::wstring unixPath = utf8ToWide(unixPathRaw);
+    HeapFree(GetProcessHeap(), 0, unixPathRaw);
 
     for(auto& c : filters) {
         if(c == L'\0') {
@@ -210,13 +216,15 @@ std::pair<Bridge::LinuxDialogResult, std::wstring> Bridge::LinuxDialog(DialogTyp
 
     switch(code) {
         case 0: {
-            std::wstring result = utf8ToWide(output);
-
-            std::wstring winPath = result;
-            typedef std::wstring (WINAPI *wine_get_dos_file_name_func)(const wchar_t*);
+            std::wstring winPath = utf8ToWide(output);
+            typedef wchar_t* (CDECL *wine_get_dos_file_name_func)(const char*);
             wine_get_dos_file_name_func wine_get_dos_file_name = (wine_get_dos_file_name_func)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "wine_get_dos_file_name");
             if(wine_get_dos_file_name) {
-                winPath = wine_get_dos_file_name(result.c_str());
+                wchar_t* dosPathRaw = wine_get_dos_file_name(output.c_str());
+                if(dosPathRaw) {
+                    winPath = std::wstring(dosPathRaw);
+                    HeapFree(GetProcessHeap(), 0, dosPathRaw);
+                }
             }
 
             return {LinuxDialogResult::Success, winPath};
