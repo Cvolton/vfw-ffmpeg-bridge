@@ -37,9 +37,32 @@ jobs:
         name: vfw-ffmpeg-bridge_${{ matrix.config.name }}
         path: ./build/Release/
 
+  build-file-picker:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v7
+      with:
+        submodules: recursive
+
+    - name: Configure & Build
+      run: |
+        cd linux-file-picker
+        cmake -B build -DCMAKE_BUILD_TYPE=Release
+        cmake --build build --config Release
+
+    - name: Upload release build
+      uses: actions/upload-artifact@v7
+      with:
+        name: linux-file-picker
+        path: ./linux-file-picker/build/fbrg-file-picker
+
   build-installer:
     runs-on: windows-2022
-    needs: build-msvc
+    needs: |
+      build-msvc
+      build-file-picker
 
     steps:
     - name: Checkout
@@ -55,8 +78,10 @@ jobs:
       run: |
         mkdir -p installer/files/x86
         mkdir -p installer/files/x64
+        mkdir -p installer/files/wine
         Copy-Item -Path "${{ github.workspace }}/artifacts/vfw-ffmpeg-bridge_x86/*.dll" -Destination installer/files/x86/
         Copy-Item -Path "${{ github.workspace }}/artifacts/vfw-ffmpeg-bridge_x64/*.dll" -Destination installer/files/x64/
+        Copy-Item -Path "${{ github.workspace }}/artifacts/linux-file-picker/*" -Destination installer/files/wine/
 
     - name: Build installer
       run: |

@@ -15,5 +15,5 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nfd)
 
-add_executable(fbrg-file-picker main.cpp)
-target_link_libraries(fbrg-file-picker PRIVATE nfd)
+add_executable(fbrg_file_picker main.cpp)
+target_link_libraries(fbrg_file_picker PRIVATE nfd)

@@ -59,6 +59,7 @@ Section "VfW Driver (required)" SEC_VFW
     SetOutPath "$INSTDIR\wine"
     File "files\wine\ffmpeg.exe"
     File "files\wine\ffmpeg_linux_worker"
+    File "files\wine\fbrg_file_picker"
 SectionEnd
 
 ; FFmpeg

@@ -185,7 +185,7 @@ std::pair<Bridge::LinuxDialogResult, std::wstring> Bridge::LinuxDialog(DialogTyp
         return {LinuxDialogResult::Error, L""};
     }
 
-    auto loc = Bridge::GetInstallDir() + L"\\wine\\linux-file-picker.exe";
+    auto loc = Bridge::GetInstallDir() + L"\\wine\\fbrg_file_picker";
     
     typedef std::wstring (WINAPI *wine_get_unix_file_name_func)(const wchar_t*);
     wine_get_unix_file_name_func wine_get_unix_file_name = (wine_get_unix_file_name_func)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "wine_get_unix_file_name");
