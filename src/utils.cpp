@@ -1,4 +1,5 @@
 #include "utils.hpp"
+#include <ShObjIdl_core.h>
 HINSTANCE Bridge::g_hInstance = nullptr;
 
 std::wstring Bridge::GetAdjacentPath(HMODULE hModule, const wchar_t* targetDllName)
@@ -31,6 +32,93 @@ HMODULE Bridge::LoadAdjacentDLL(HMODULE hModule, const wchar_t* targetDllName)
         return LoadLibraryW(targetDllPath.c_str());
     }
     return nullptr;
+}
+
+std::optional<std::wstring> Bridge::SaveDialog(std::wstring defaultPath, std::wstring filters) {
+    wchar_t fileBuffer[MAX_PATH] = {};
+    wcsncpy_s(fileBuffer, defaultPath.c_str(), _TRUNCATE);
+
+    OPENFILENAMEW ofn = {};
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = GetActiveWindow();
+    ofn.lpstrFilter = filters.c_str();
+    ofn.lpstrFile = fileBuffer;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.lpstrDefExt = L"mp4";
+    ofn.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+
+    if (GetSaveFileNameW(&ofn)) {
+        return std::wstring(fileBuffer);
+    }
+    return std::nullopt;
+}
+
+std::optional<std::wstring> Bridge::OpenDialog(std::wstring defaultPath, std::wstring filters) {
+    wchar_t fileBuffer[MAX_PATH] = {};
+    wcsncpy_s(fileBuffer, defaultPath.c_str(), _TRUNCATE);
+
+    OPENFILENAMEW ofn = {};
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = GetActiveWindow();
+    ofn.lpstrFilter = filters.c_str();
+    ofn.lpstrFile = fileBuffer;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.lpstrDefExt = L"mp4";
+    ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+
+    if (GetOpenFileNameW(&ofn)) {
+        return std::wstring(fileBuffer);
+    }
+    return std::nullopt;
+}
+
+std::optional<std::wstring> Bridge::FolderDialog(std::wstring defaultPath, HWND hwndDlg) {
+    std::optional<std::wstring> ret = std::nullopt;
+
+    HRESULT hrInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    bool comInitializedHere = SUCCEEDED(hrInit);
+    bool comUsable = SUCCEEDED(hrInit) || hrInit == RPC_E_CHANGED_MODE;
+
+    if (comUsable) {
+        IFileOpenDialog* pDialog = nullptr;
+        HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER,
+                                    IID_PPV_ARGS(&pDialog));
+
+        if (SUCCEEDED(hr)) {
+            DWORD options = 0;
+            pDialog->GetOptions(&options);
+            pDialog->SetOptions(options | FOS_PICKFOLDERS | FOS_PATHMUSTEXIST | FOS_FORCEFILESYSTEM);
+
+            if (!defaultPath.empty()) {
+                IShellItem* pDefaultFolder = nullptr;
+                if (SUCCEEDED(SHCreateItemFromParsingName(defaultPath.c_str(), nullptr, IID_PPV_ARGS(&pDefaultFolder)))) {
+                    pDialog->SetFolder(pDefaultFolder);
+                    pDefaultFolder->Release();
+                }
+            }
+
+            hr = pDialog->Show(hwndDlg);
+            if (SUCCEEDED(hr)) {
+                IShellItem* pResult = nullptr;
+                if (SUCCEEDED(pDialog->GetResult(&pResult))) {
+                    PWSTR path = nullptr;
+                    if (SUCCEEDED(pResult->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
+                        ret = std::wstring(path);
+                        CoTaskMemFree(path);
+                    }
+                    pResult->Release();
+                }
+            }
+
+            pDialog->Release();
+        }
+    }
+
+    if (comInitializedHere) {
+        CoUninitialize();
+    }
+
+    return ret;
 }
 
 HMODULE TMAudio::g_hModule = nullptr;

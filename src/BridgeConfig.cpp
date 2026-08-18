@@ -2,13 +2,14 @@
 #include "CodecState.hpp"
 #include "CodecSets.hpp"
 #include "AudioSets.hpp"
+#include "resource.h"
+#include "utils.hpp"
 
 #include <ShObjIdl_core.h>
 #include <commctrl.h>
 #include <string_view>
 #include <string>
 #include <vector>
-#include "resource.h"
 
 void PopulateCombo(HWND hCombo, const wchar_t* const* items, size_t count, const std::wstring& target, const wchar_t* fallback) {
     for (size_t i = 0; i < count; ++i) {
@@ -612,48 +613,9 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
                     return (INT_PTR)TRUE;
                 }
                 case IDC_BTN_LOC_BROWSE: {
-                    HRESULT hrInit = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-                    bool comInitializedHere = SUCCEEDED(hrInit);
-                    bool comUsable = SUCCEEDED(hrInit) || hrInit == RPC_E_CHANGED_MODE;
-
-                    if (comUsable) {
-                        IFileOpenDialog* pDialog = nullptr;
-                        HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER,
-                                                    IID_PPV_ARGS(&pDialog));
-
-                        if (SUCCEEDED(hr)) {
-                            DWORD options = 0;
-                            pDialog->GetOptions(&options);
-                            pDialog->SetOptions(options | FOS_PICKFOLDERS | FOS_PATHMUSTEXIST | FOS_FORCEFILESYSTEM);
-
-                            if (!state->otherLocation.empty()) {
-                                IShellItem* pDefaultFolder = nullptr;
-                                if (SUCCEEDED(SHCreateItemFromParsingName(state->otherLocation.c_str(), nullptr, IID_PPV_ARGS(&pDefaultFolder)))) {
-                                    pDialog->SetFolder(pDefaultFolder);
-                                    pDefaultFolder->Release();
-                                }
-                            }
-
-                            hr = pDialog->Show(hwndDlg);
-                            if (SUCCEEDED(hr)) {
-                                IShellItem* pResult = nullptr;
-                                if (SUCCEEDED(pDialog->GetResult(&pResult))) {
-                                    PWSTR path = nullptr;
-                                    if (SUCCEEDED(pResult->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
-                                        state->otherLocation = path;
-                                        SetDlgItemTextW(hwndDlg, IDC_EDIT_LOC_PATH, path);
-                                        CoTaskMemFree(path);
-                                    }
-                                    pResult->Release();
-                                }
-                            }
-
-                            pDialog->Release();
-                        }
-                    }
-
-                    if (comInitializedHere) {
-                        CoUninitialize();
+                    if(auto res = Bridge::FolderDialog(state->otherLocation, hwndDlg)) {
+                        state->otherLocation = res.value();
+                        SetDlgItemTextW(hwndDlg, IDC_EDIT_LOC_PATH, res->c_str());
                     }
 
                     return (INT_PTR)TRUE;
@@ -662,18 +624,9 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
                     wchar_t fileBuffer[MAX_PATH] = {};
                     GetDlgItemTextW(hwndDlg, IDC_EDIT_FFMPEG_OTHER_PATH, fileBuffer, _countof(fileBuffer));
 
-                    OPENFILENAMEW ofn = {};
-                    ofn.lStructSize = sizeof(ofn);
-                    ofn.hwndOwner = hwndDlg;
-                    ofn.lpstrFilter = L"Executable Files (*.exe)\0*.exe\0All Files (*.*)\0*.*\0";
-                    ofn.lpstrFile = fileBuffer;
-                    ofn.nMaxFile = MAX_PATH;
-                    ofn.lpstrDefExt = L"exe";
-                    ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
-
-                    if (GetOpenFileNameW(&ofn)) {
-                        state->otherFfmpegPath = fileBuffer;
-                        SetDlgItemTextW(hwndDlg, IDC_EDIT_FFMPEG_OTHER_PATH, fileBuffer);
+                    if (auto res = Bridge::OpenDialog(fileBuffer, L"Executable Files (*.exe)\0*.exe\0All Files (*.*)\0*.*\0")) {
+                        state->otherFfmpegPath = res.value();
+                        SetDlgItemTextW(hwndDlg, IDC_EDIT_FFMPEG_OTHER_PATH, res->c_str());
                     }
 
                     return (INT_PTR)TRUE;

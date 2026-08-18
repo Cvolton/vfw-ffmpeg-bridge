@@ -1,12 +1,17 @@
 #pragma once
 #include <windows.h>
 #include <string>
+#include <optional>
 
 namespace Bridge {
     extern HINSTANCE g_hInstance;
 
     HMODULE LoadAdjacentDLL(HMODULE hModule, const wchar_t* targetDllName);
     std::wstring GetAdjacentPath(HMODULE hModule, const wchar_t* targetDllName);
+
+    std::optional<std::wstring> SaveDialog(std::wstring defaultPath, std::wstring filters);
+    std::optional<std::wstring> OpenDialog(std::wstring defaultPath, std::wstring filters);
+    std::optional<std::wstring> FolderDialog(std::wstring defaultPath, HWND hwndDlg = nullptr);
 }
 
 namespace TMAudio {
