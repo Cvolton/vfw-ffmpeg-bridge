@@ -57,7 +57,7 @@ jobs:
       uses: actions/upload-artifact@v7
       with:
         name: linux-file-picker
-        path: ./linux-file-picker/build/fbrg-file-picker
+        path: ./linux-file-picker/build/fbrg_file_picker
 
   build-installer:
     runs-on: windows-2022
