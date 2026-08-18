@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+using namespace std::literals::string_literals;
+
 void PopulateCombo(HWND hCombo, const wchar_t* const* items, size_t count, const std::wstring& target, const wchar_t* fallback) {
     for (size_t i = 0; i < count; ++i) {
         SendMessageW(hCombo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(items[i]));
@@ -624,7 +626,7 @@ INT_PTR CALLBACK BridgeConfig::ConfigDlgProc(HWND hwndDlg, UINT uMsg, WPARAM wPa
                     wchar_t fileBuffer[MAX_PATH] = {};
                     GetDlgItemTextW(hwndDlg, IDC_EDIT_FFMPEG_OTHER_PATH, fileBuffer, _countof(fileBuffer));
 
-                    if (auto res = Bridge::OpenDialog(fileBuffer, L"Executable Files (*.exe)\0*.exe\0All Files (*.*)\0*.*\0")) {
+                    if (auto res = Bridge::OpenDialog(fileBuffer, L"Executable Files (*.exe)\0*.exe\0All Files (*.*)\0*.*\0"s)) {
                         state->otherFfmpegPath = res.value();
                         SetDlgItemTextW(hwndDlg, IDC_EDIT_FFMPEG_OTHER_PATH, res->c_str());
                     }
