@@ -30,6 +30,7 @@ target_link_libraries(vfwbrdg PRIVATE
     winmm.lib 
     user32.lib
     comctl32.lib
+    comdlg32.lib
 )
 
 find_package(Git QUIET)
