@@ -48,6 +48,7 @@ jobs:
 
     - name: Configure & Build
       run: |
+        sudo apt-get install libdbus-1-dev
         cd linux-file-picker
         cmake -B build -DCMAKE_BUILD_TYPE=Release
         cmake --build build --config Release
